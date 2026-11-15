@@ -4,10 +4,22 @@ import org.json.JSONArray
 import java.net.HttpURLConnection
 import java.net.URL
 
-data class Species(val id: String, val name: String, val atk: Int, val def: Int, val hp: Int)
+/** [form] is "Normal" for the default form, otherwise e.g. "Alola", "Galarian", "Hisuian", "Therian". */
+data class Species(val id: String, val name: String, val atk: Int, val def: Int, val hp: Int, val form: String = "Normal") {
+    val label: String get() = if (form.equals("Normal", true)) name else "$name (${form.replace('_', ' ')})"
+}
 
 data class Iv(val a: Int, val d: Int, val s: Int) {
-    val pct: Double get() = (a + d + s) * 100.0 / 45.0
+    val total: Int get() = a + d + s
+    val pct: Double get() = total * 100.0 / 45.0
+    /** Appraisal stars as the game shows them: 0-3, and 4 for a perfect 15/15/15 ("hundo"). */
+    val stars: Int get() = when {
+        total == 45 -> 4
+        total >= 37 -> 3
+        total >= 30 -> 2
+        total >= 23 -> 1
+        else -> 0
+    }
 }
 
 /**
@@ -21,8 +33,9 @@ object SpeciesDb {
     @Volatile private var lastAttempt = 0L
     @Volatile var lastError: String? = null; private set
 
-    private var byNorm: Map<String, Species> = emptyMap()
-    private var longestFirst: List<Species> = emptyList()
+    /** normalised name -> forms with distinct stats, Normal first. */
+    private var byNorm: Map<String, List<Species>> = emptyMap()
+    private var longestFirst: List<String> = emptyList()
 
     val ready: Boolean get() = all.isNotEmpty()
 
@@ -36,19 +49,23 @@ object SpeciesDb {
                 c.connectTimeout = 8000; c.readTimeout = 15000
                 val json = c.inputStream.bufferedReader().use { it.readText() }
                 val arr = JSONArray(json)
-                val list = LinkedHashMap<String, Species>()
+                val groups = LinkedHashMap<String, MutableList<Species>>()
                 for (i in 0 until arr.length()) {
                     val o = arr.getJSONObject(i)
-                    // base forms only; Alolan/Galarian/etc. are separate entries we deliberately skip
-                    if (!o.optString("form", "Normal").equals("Normal", true)) continue
                     val name = o.getString("pokemon_name")
-                    list.putIfAbsent(Rules.norm(name), Species(
-                        Rules.norm(name), name,
-                        o.getInt("base_attack"), o.getInt("base_defense"), o.getInt("base_stamina")))
+                    val key = Rules.norm(name)
+                    val sp = Species(key, name, o.getInt("base_attack"), o.getInt("base_defense"),
+                        o.getInt("base_stamina"), o.optString("form", "Normal"))
+                    val list = groups.getOrPut(key) { mutableListOf() }
+                    // Costumes etc. share stats with another form; keep one entry per stat line
+                    val same = list.indexOfFirst { it.atk == sp.atk && it.def == sp.def && it.hp == sp.hp }
+                    if (same < 0) list += sp
+                    else if (sp.form.equals("Normal", true)) list[same] = sp
                 }
-                byNorm = list
-                longestFirst = list.values.sortedByDescending { it.name.length }
-                all = list.values.toList()
+                groups.values.forEach { l -> l.sortBy { if (it.form.equals("Normal", true)) 0 else 1 } }
+                byNorm = groups
+                longestFirst = groups.keys.sortedByDescending { it.length }
+                all = groups.values.flatten()
                 lastError = null
             } catch (e: Exception) {
                 lastError = e.message ?: "network error"
@@ -57,11 +74,11 @@ object SpeciesDb {
     }
 
     /** Finds a species name among the OCR lines (exact line first, then a line containing the name). */
-    fun find(lines: List<String>): Species? {
+    fun find(lines: List<String>): List<Species>? {
         for (l in lines) byNorm[Rules.norm(l)]?.let { return it }
         for (l in lines) {
             val n = Rules.norm(l)
-            longestFirst.firstOrNull { it.name.length >= 5 && n.contains(Rules.norm(it.name)) }?.let { return it }
+            longestFirst.firstOrNull { it.length >= 5 && n.contains(it) }?.let { return byNorm[it] }
         }
         return null
     }

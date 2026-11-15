@@ -1,13 +1,148 @@
-# Trainer Lens (Android)
-Screen-reading overlay for Pokémon GO (MediaProjection + on-device ML Kit OCR). Never taps or injects input.
+# Trainer Lens 🔍
 
-1. Bag advisor - open Items, scroll the list, tap the 🔍 bubble. Tune keep-counts in `Rules.kt`.
-2. IV checker - open a Pokémon summary: IV % (or range), Great/Ultra League rank. Base stats are fetched from
-   pogoapi.net at runtime and kept in memory only.
+[![Build APK](https://github.com/PremKishore27/trainer-lens/actions/workflows/build-apk.yml/badge.svg)](https://github.com/PremKishore27/trainer-lens/actions/workflows/build-apk.yml)
+[![Latest release](https://img.shields.io/github/v/release/PremKishore27/trainer-lens?label=latest&color=2ea043)](https://github.com/PremKishore27/trainer-lens/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/PremKishore27/trainer-lens/total?color=blue)](https://github.com/PremKishore27/trainer-lens/releases)
+![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)
+![Kotlin](https://img.shields.io/badge/Kotlin-1.9-7F52FF?logo=kotlin&logoColor=white)
 
-## Get the APK
-Push this folder to a GitHub repo -> Actions tab -> "Build APK" -> download the `TrainerLens-debug-apk` artifact
-(unzip -> app-debug.apk), then sideload it. Or open in Android Studio and run on a device.
-First launch: tap steps 1-4 on the start screen.
+**A screen-reading helper overlay for Pokémon GO on Android.**
+It watches your screen with on-device text recognition and shows a small card with useful info on top of the game:
+how to clean up your **item bag**, and the **IVs and PvP rank** of any Pokémon you open.
 
-Status: draft, not yet compiled or run on a device.
+> 🛡️ **Read-only by design.** Trainer Lens never taps, swipes, injects input, or talks to the game's servers.
+> It only *looks* at the screen – like a friend looking over your shoulder.
+
+### ⬇️ [Download the latest APK](https://github.com/PremKishore27/trainer-lens/releases/latest/download/TrainerLens.apk)
+
+---
+
+## Features
+
+| | Feature | What it shows |
+|---|---|---|
+| 🎒 | **Bag advisor** | Reads your Items list while you scroll. Shows free slots, what you **can remove** (over your keep limit) and what to **keep** – even when the bag isn't full. When it is full, it tells you exactly what to discard to free the slots you want. |
+| 📊 | **IV checker** | Open any Pokémon: a card appears with **IV %**, appraisal **stars**, the **Attack / Defense / HP** spread, estimated **level**, and **Little / Great / Ultra League rank**. |
+| 🌍 | **Regional forms** | Tries Alolan, Galarian, Hisuian and other forms automatically. |
+| ✨ | **Shadow / purified / lucky** | Understands their different stardust costs. |
+| 🔄 | **Always up to date** | Base stats are loaded from the [pogoapi.net](https://pogoapi.net) community database, so new Pokémon work without an app update. |
+
+### Example IV card
+
+```
+Pikachu  80.0%  ★★☆
+Atk 12 · Def 12 · HP 12   Lv 20
+CP 510 · HP 73 · ✨2500
+Little #1635 (92.7%) · Great #182 (93.2%) · Ultra #182 (93.2%)
+```
+
+Green card = great Pokémon (top-25 PvP rank or ≥ 98 %), yellow = decent, red = weak.
+How the numbers are calculated (formulas, tables, worked example): **[docs/IV-CALCULATIONS.md](docs/IV-CALCULATIONS.md)**.
+
+---
+
+## Install
+
+Trainer Lens isn't on the Play Store, so Android shows a few extra safety prompts. **They're all expected.**
+
+1. **Download** [`TrainerLens.apk`](https://github.com/PremKishore27/trainer-lens/releases/latest/download/TrainerLens.apk) on your phone and open it.
+   If asked, allow your browser / Files app to **install unknown apps**.
+2. **Google Play Protect** may offer to scan the app → tap **Install without scanning** (or let it scan).
+3. **Unlock restricted settings** – Android blocks *Display over other apps* for apps installed from outside the Play Store:
+   *Settings → Apps → Trainer Lens → **⋮** (top right) → **Allow restricted settings*** → confirm with your PIN/fingerprint.
+4. Open Trainer Lens and tap the steps **1 → 4**:
+
+   | Step | Permission | Why it's needed |
+   |---|---|---|
+   | 1 | Notifications | Android requires a notification while the screen is being read |
+   | 2 | Display over other apps | Shows the 🔍 bubble and IV card on top of the game |
+   | 3 | Don't restrict battery *(recommended)* | Stops Android from killing the overlay |
+   | 4 | Screen capture | Lets it read the screen – choose **Entire screen** |
+
+5. Switch to Pokémon GO. Tap 🔍 for the bag advisor; the IV card appears on its own on a Pokémon's page.
+
+**Updating:** install the new APK over the old one – permissions and settings stay.
+<sub>Installed a build older than v0.2.4? Uninstall it once first; it was signed with a different key.</sub>
+
+Tested on: Motorola Signature (Android 17). Requires Android 8.0 or newer.
+
+---
+
+## Using it
+
+### 🎒 Bag advisor
+1. In Pokémon GO open **Items**, tap 🔍, then **Reset**.
+2. Scroll slowly through the whole list. *Items seen* counts the different item types it recognised.
+3. Read the panel:
+   - **Can remove** – items above their keep limit (e.g. 84 Poké Balls with a limit of 50 → remove 34).
+   - **Keep** – everything else, plus protected items (incense, lures, passes, incubators, camera, gifts, evolution items, Star Piece, Lucky Egg, Golden Razz, Rare Candy, TMs) that are never suggested.
+   - **Free more (+10)** – the app aims to keep 30 slots empty; each tap raises the target by 10. It only matters when the bag is nearly full.
+
+Keep limits are in [`Rules.kt`](app/src/main/java/dev/trainerlens/Rules.kt) – earlier items in the list are suggested first.
+
+### 📊 IV checker
+Just open a Pokémon. The card shows:
+- **Exact IVs** when only one spread fits, otherwise a **range** with the best and worst possible spread.
+  Low-level Pokémon often give a range – appraise them in-game to narrow it down.
+- **League rank** among all 4,096 spreads of that species (rank #1 = best possible). `n/a` = it can't fit under that CP cap.
+
+---
+
+## Privacy & permissions
+
+- 📵 Screen images are processed **on the phone** by Google ML Kit and immediately discarded. Nothing is recorded, saved or uploaded.
+- 🌐 The only internet request is downloading Pokémon base stats from `pogoapi.net` (no data about you is sent).
+- 🔒 No accounts, no ads, no analytics, no trackers.
+
+## Limitations
+
+- English game language (German labels partly supported).
+- Mega-evolved and best-buddy-boosted Pokémon may show "no match".
+- Text recognition can misread a digit – give the card a second to settle.
+- Stickers and scrapbook pages aren't counted in the bag advisor yet.
+
+## FAQ
+
+**Is this allowed?** It's an unofficial tool. It doesn't modify, automate or connect to the game, but any third-party tool is used at your own risk.
+**Why does it need screen recording?** That's the only way an Android app can see what another app shows. The recording never leaves your phone.
+**The bubble disappeared.** Android may stop the screen capture after a while – open Trainer Lens and tap step 4 again. Step 3 (battery) helps.
+**"No IV spread fits".** Wait a second (OCR may have misread), or it's a Mega / buddy-boosted Pokémon.
+
+---
+
+## Build from source
+
+```bash
+git clone https://github.com/PremKishore27/trainer-lens.git
+cd trainer-lens
+gradle assembleDebug        # needs JDK 17 + Android SDK, or open the folder in Android Studio
+```
+
+Every push builds an APK on GitHub Actions; pushes to `main` publish a new [Release](https://github.com/PremKishore27/trainer-lens/releases) with the `.apk` attached.
+
+<details>
+<summary>Project structure</summary>
+
+| File | Role |
+|---|---|
+| `CaptureService.kt` | Screen capture, OCR loop (1×/second), overlay bubble |
+| `BagFeature.kt` · `ItemParser.kt` · `Recommender.kt` · `Rules.kt` | Bag advisor |
+| `IvFeature.kt` · `SummaryParser.kt` · `IvAnalyzer.kt` · `IvSolver.kt` | IV checker |
+| `Cpm.kt` | CP multiplier and stardust tables, CP/HP formulas |
+| `Pvp.kt` | League rank tables |
+| `Species.kt` | Base stats from pogoapi.net, forms |
+| `MainActivity.kt` | Setup screen with the 4 permission steps |
+
+</details>
+
+## Roadmap
+
+- [x] Bag advisor
+- [x] IV checker with PvP ranks
+- [ ] Read the in-game appraisal for exact IVs
+- [ ] Editable keep limits inside the app
+- [ ] Stickers & more languages
+
+---
+
+<sub>Trainer Lens is a fan-made project and is not affiliated with, endorsed or sponsored by Niantic, Scopely, Nintendo, Creatures, GAME FREAK or The Pokémon Company. Pokémon and Pokémon GO are trademarks of their respective owners.</sub>

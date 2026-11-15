@@ -34,27 +34,45 @@ class IvFeature(private val ctx: Context, private val wm: WindowManager) {
             show("Loading Pokémon data… (internet needed)" + (SpeciesDb.lastError?.let { "\nLast error: $it" } ?: ""), 0xCC555555.toInt())
             return
         }
-        val sp = read?.let { SpeciesDb.find(it.lines) }
-        if (read == null || sp == null) {
+        val forms = read?.let { SpeciesDb.find(it.lines) }
+        if (read == null || forms.isNullOrEmpty()) {
             if (now - lastSeen > 3000) card.visibility = View.GONE
             return
         }
         lastSeen = now
-        val key = "${sp.id}-${read.cp}-${read.hp}-${read.dust}"
+        val key = "${forms[0].id}-${read.cp}-${read.hp}-${read.dust}"
         if (key == lastKey) return
         lastKey = key
-        val r = IvAnalyzer.analyze(sp, read.cp, read.hp, read.dust)
-        if (r == null) { show("${sp.name}: no IV match (shadow/purified/mega or misread?)", 0xCC555555.toInt()); return }
-        show(format(r), color(r))
+        val r = IvAnalyzer.analyze(forms, read.cp, read.hp, read.dust)
+        if (r == null) {
+            show("${forms[0].name} · CP ${read.cp} · HP ${read.hp}" + (read.dust?.let { " · ✨$it" } ?: "") +
+                "\nNo IV spread fits these numbers.\nMega-evolved, buddy-boosted or misread? Wait a second and re-open.", 0xCC555555.toInt())
+            return
+        }
+        show(format(r, read), color(r))
     }
 
-    private fun format(r: IvResult): String {
+    private fun stars(n: Int) = if (n == 4) "★★★ 100%" else "★".repeat(n) + "☆".repeat(3 - n)
+    private fun lv(x: Double) = if (x % 1.0 == 0.0) "%.0f".format(x) else "%.1f".format(x)
+    private fun spread(iv: Iv) = "${iv.a}/${iv.d}/${iv.s}"
+
+    private fun format(r: IvResult, read: SummaryRead): String {
         val sb = StringBuilder()
         val e = r.exact
-        if (e != null) sb.append("${r.species.name}  ${"%.1f".format(e.pct)}%  (${e.a}/${e.d}/${e.s})\n")
-        else sb.append("${r.species.name}  ${"%.0f".format(r.pctMin)}–${"%.0f".format(r.pctMax)}%  (${r.candidates.size} spreads)\n")
-        sb.append("Great: ${fmt(r.great)}   Ultra: ${fmt(r.ultra)}\n")
-        sb.append("Estimate – shadow/purified/mega/L40+ may be off")
+        val level = if (r.levelMin == r.levelMax) "Lv ${lv(r.levelMin)}" else "Lv ${lv(r.levelMin)}–${lv(r.levelMax)}"
+        if (e != null) {
+            sb.append("${r.species.label}  ${"%.1f".format(e.pct)}%  ${stars(e.stars)}\n")
+            sb.append("Atk ${e.a} · Def ${e.d} · HP ${e.s}   $level\n")
+        } else {
+            val lo = r.worst; val hi = r.best
+            sb.append("${r.species.label}  ${"%.0f".format(r.pctMin)}–${"%.0f".format(r.pctMax)}%  ${stars(lo.stars)}–${stars(hi.stars)}\n")
+            sb.append("${r.candidates.size} possible spreads · $level\n")
+            sb.append("Best ${spread(hi)} · Worst ${spread(lo)}\n")
+        }
+        sb.append("CP ${read.cp} · HP ${read.hp}" + (read.dust?.let { " · ✨$it" } ?: " · dust not read") + "\n")
+        sb.append("Little ${fmt(r.little)} · Great ${fmt(r.great)} · Ultra ${fmt(r.ultra)}")
+        if (r.otherForms.isNotEmpty()) sb.append("\nAlso fits: ${r.otherForms.joinToString { it.label }}")
+        if (e == null) sb.append("\nAppraise it in-game to narrow this down")
         return sb.toString()
     }
 

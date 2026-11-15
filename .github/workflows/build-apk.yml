@@ -1,7 +1,12 @@
 name: Build APK
 on:
   push:
+  pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: write # needed to publish GitHub Releases
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -11,9 +16,54 @@ jobs:
         with: { distribution: temurin, java-version: 17 }
       - uses: gradle/actions/setup-gradle@v4
         with: { gradle-version: "8.9" }
-      - name: Build debug APK
-        run: gradle assembleDebug --no-daemon
+
+      - name: Restore signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "SIGNING_KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          else
+            echo "::warning::No signing secrets - APK is signed with a throwaway debug key"
+          fi
+
+      - name: Build release APK
+        env:
+          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+        run: gradle assembleRelease --no-daemon -PversionCode=${{ github.run_number }}
+
+      - name: Name the APK
+        id: apk
+        run: |
+          v="0.2.${{ github.run_number }}"
+          mkdir -p out
+          cp app/build/outputs/apk/release/app-release.apk "out/TrainerLens-v$v.apk"
+          cp app/build/outputs/apk/release/app-release.apk out/TrainerLens.apk
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "size=$(du -h out/TrainerLens.apk | cut -f1)" >> "$GITHUB_OUTPUT"
+
+      # Plain .apk for every build (tests / pull requests). GitHub always zips these.
       - uses: actions/upload-artifact@v4
         with:
-          name: TrainerLens-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: TrainerLens-v${{ steps.apk.outputs.version }}
+          path: out/TrainerLens-v${{ steps.apk.outputs.version }}.apk
+
+      # Pushes to main become a GitHub Release with the .apk attached directly (no zip).
+      - name: Publish GitHub Release
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          v="${{ steps.apk.outputs.version }}"
+          {
+            echo "**Download:** \`TrainerLens-v$v.apk\` below (${{ steps.apk.outputs.size }}). Android 8.0+."
+            echo
+            echo "**What's new:** $(printf '%s' "$COMMIT_MSG" | head -1)"
+            echo
+            cat .github/release-notes.md
+          } > notes.md
+          gh release create "v$v" out/TrainerLens-v$v.apk out/TrainerLens.apk \
+            --title "Trainer Lens v$v" --notes-file notes.md --target "${{ github.sha }}" --latest

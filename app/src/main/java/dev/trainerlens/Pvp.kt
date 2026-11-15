@@ -9,7 +9,7 @@ object Pvp {
     private val cache = HashMap<String, Map<Iv, Rank>?>()
 
     fun table(sp: Species, capCp: Int, maxLevel: Double = 50.0): Map<Iv, Rank>? =
-        cache.getOrPut("${sp.id}-$capCp-$maxLevel") { build(sp, capCp, maxLevel) }
+        cache.getOrPut("${sp.id}-${sp.form}-$capCp-$maxLevel") { build(sp, capCp, maxLevel) }
 
     private fun build(sp: Species, capCp: Int, maxLevel: Double): Map<Iv, Rank>? {
         val levels = Cpm.levels(maxLevel).reversed()
