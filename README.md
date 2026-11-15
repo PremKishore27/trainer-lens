@@ -21,7 +21,7 @@ how to clean up your **item bag**, and the **IVs and PvP rank** of any Pokémon 
 
 | | Feature | What it shows |
 |---|---|---|
-| 🖐️ | **Movable overlay** | One 🔍 bubble you can drag anywhere, with 🎒 Bag and 📊 IV tabs. |
+| 🖐️ | **Movable glass overlay** | A 🔍 bubble you can drag anywhere. Tap it for one fixed-size, frosted-glass window with **IV** and **Bag** tabs – it never resizes, whichever Pokémon you open. Drag it by its top bar; the bubble and the window each remember their own spot. |
 | 🎒 | **Bag advisor** | Remembers your items for the whole session while you scroll. Shows free slots, what you **can remove** (over your keep limit) and what to **keep** – even when the bag isn't full. When it is full, it tells you exactly what to discard to free the slots you want. |
 | 📊 | **IV checker** | Open any Pokémon with the IV tab selected. **Appraise it for exact IVs** – the app measures the appraisal bars like Poké Genie. The card shows **IV %**, appraisal **stars**, the **Attack / Defense / HP** spread, estimated **level**, and **Little / Great / Ultra League rank**. |
 | 🌍 | **Nicknames & regional forms** | Finds the species from its candy label, types, size and EVOLVE button – never from the name alone – so renamed Pokémon and Alolan / Galarian / Hisuian forms work. Shows **"Not it?"** buttons when two species fit. |
@@ -34,14 +34,19 @@ how to clean up your **item bag**, and the **IVs and PvP rank** of any Pokémon 
 ### Example IV card
 
 ```
-Kingdra
-91%  15/13/13  Excellent ★★★
-Lv 39 · CP 2578 · HP 152
-PvP: ❌ Not good for PvP
-✔ from appraisal
+Kingdra                         nickname
+ ( 91% )  ATK ▬▬▬▬▬▬▬ 15
+ ( 41/45) DEF ▬▬▬▬▬▬  13
+          HP  ▬▬▬▬▬▬  13
+[ Lv 39 ] [ CP 2578 ] [ HP 152 ]
+Little —          Great  —
+Ultra  CP too high  Master —
+Excellent ★★★ · exact
 ```
 
-Green card = great Pokémon (top-25 PvP rank or ≥ 98 %), yellow = decent, red = weak.
+The ring and bars are green for a great Pokémon (top-100 PvP rank or ≥ 91 %), amber for decent, red for weak.
+League rows: ✓ = top 100 of 4,096 spreads, ? = maybe (depends on the exact IVs), ✗ = not good, *CP too high* = already past that league's cap.
+The overlay hides itself from its own screen reading (its area is blacked out before text recognition), so it can't misread its own numbers.
 How the numbers are calculated (formulas, tables, worked example): **[docs/IV-CALCULATIONS.md](docs/IV-CALCULATIONS.md)**.
 
 ---
@@ -152,7 +157,8 @@ Every push builds an APK on GitHub Actions; pushes to `main` publish a new [Rele
 
 | File | Role |
 |---|---|
-| `CaptureService.kt` | Screen capture, OCR loop (1×/second), draggable overlay with tabs |
+| `CaptureService.kt` | Screen capture, OCR loop, the fixed-size draggable glass window (bubble ⇄ panel) |
+| `Ui.kt` · `IvCardView.kt` · `CardModel.kt` | Overlay look: colours, ring/bar views, the IV card, and its content as plain testable data |
 | `BagFeature.kt` · `ItemParser.kt` · `Recommender.kt` · `Rules.kt` | Bag advisor |
 | `IvFeature.kt` · `SummaryParser.kt` · `IvAnalyzer.kt` · `IvSolver.kt` | IV checker |
 | `Cpm.kt` | CP multiplier and stardust tables, CP/HP formulas |
