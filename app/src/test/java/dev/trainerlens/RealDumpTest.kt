@@ -90,7 +90,7 @@ class RealDumpTest {
         tr.observeBars(Iv(13, 14, 13)); tr.observeBars(Iv(13, 14, 13))
         val r = tr.result!!
         assertEquals(Iv(13, 14, 13), r.exact); assertEquals(31.0, r.levelMin, 0.0); assertEquals(31.0, r.levelMax, 0.0)
-        assertEquals(87, Math.round(r.exact!!.pct).toInt())
+        assertEquals(89, Math.round(r.exact!!.pct).toInt()) // 40 / 45
     }
 
     @Test fun withoutTheCaughtLineTypesAndWeightStillReject_Cutiefly() {
