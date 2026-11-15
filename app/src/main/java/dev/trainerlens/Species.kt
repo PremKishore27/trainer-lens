@@ -159,8 +159,10 @@ object SpeciesDb {
             if (n.endsWith("candy") || n.endsWith("candyxl")) continue
             d.namesLongestFirst.firstOrNull { it.length >= 5 && n.contains(it) && n.length <= it.length + 6 }?.let { named += d.byName[it]!! }
         }
+        // Several Pokémon can share a normalised name (Nidoran♀ / Nidoran♂), so merge all their families.
         val family = norms.firstNotNullOfOrNull { n ->
-            candyRx.matchEntire(n)?.groupValues?.get(1)?.let { d.byName[it] }?.first()?.let { d.family[it.dex] }
+            candyRx.matchEntire(n)?.groupValues?.get(1)?.let { d.byName[it] }
+                ?.map { it.dex }?.distinct()?.flatMap { d.family[it].orEmpty() }?.distinct()?.takeIf { it.isNotEmpty() }
         }
         val seenTypes = typesOnScreen(tokens, screenH)
 
