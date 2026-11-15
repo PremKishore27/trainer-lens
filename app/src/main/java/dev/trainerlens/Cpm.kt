@@ -35,31 +35,31 @@ object Cpm {
     fun levels(maxLevel: Double = MAX_LEVEL): List<Double> =
         generateSequence(1.0) { it + 0.5 }.takeWhile { it <= maxLevel }.toList()
 
-    /** Stardust for one power-up starting at [level] (normal Pokémon). Null at level 50+ (can't power up). */
+    /**
+     * Stardust for one power-up starting at [level] (normal Pokémon), from pogoapi.net
+     * pokemon_powerup_requirements.json. Null at level 50+ (can't be powered up further).
+     */
     fun baseDust(level: Double): Int? = when {
+        level < 1.0 || level >= 50.0 -> null
         level < 41.0 -> intArrayOf(
             200, 400, 600, 800, 1000, 1300, 1600, 1900, 2200, 2500,
             3000, 3500, 4000, 4500, 5000, 6000, 7000, 8000, 9000, 10000
         )[((level - 1) / 2).toInt()]
-        level < 45.0 -> 11000
-        level < 49.0 -> 12000
-        level < 50.0 -> 15000
-        else -> null
+        level < 43.0 -> 11000
+        level < 45.0 -> 12000
+        level < 47.0 -> 13000
+        level < 49.0 -> 14000
+        else -> 15000
     }
 
     /** Cost multipliers: normal, shadow (+20%), purified (-10%), lucky (-50%). */
-    private val dustMultipliers = doubleArrayOf(1.0, 1.2, 0.9, 0.5)
+    val dustMultipliers = doubleArrayOf(1.0, 1.2, 0.9, 0.5)
 
     /** dust cost shown on screen -> every level where some Pokémon variant would show that cost. */
     private val dustToLevels: Map<Int, List<Double>> = HashMap<Int, MutableList<Double>>().also { m ->
         for (lv in levels(49.5)) {
             val base = baseDust(lv) ?: continue
             for (mult in dustMultipliers) m.getOrPut((base * mult).roundToInt()) { mutableListOf() }.add(lv)
-        }
-        // level-40+ costs are less certain; let neighbouring buckets overlap by one half level
-        for ((cost, lo, hi) in listOf(Triple(11000, 40.5, 45.0), Triple(12000, 44.5, 49.0), Triple(15000, 48.5, 50.0))) {
-            val l = m.getOrPut(cost) { mutableListOf() }
-            levels(hi).filter { it >= lo && it !in l }.forEach { l.add(it) }
         }
     }.mapValues { it.value.distinct().sorted() }
 

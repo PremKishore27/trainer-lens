@@ -28,6 +28,16 @@ jobs:
             echo "::warning::No signing secrets - APK is signed with a throwaway debug key"
           fi
 
+      - name: Run tests (every Pokémon / form through the IV solver)
+        run: gradle testReleaseUnitTest --no-daemon
+
+      - name: Upload test report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: app/build/reports/tests/
+
       - name: Build release APK
         env:
           SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}

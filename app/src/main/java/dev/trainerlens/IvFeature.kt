@@ -14,7 +14,7 @@ import android.widget.TextView
  *  2. In-game appraisal: the three bars are measured from the screenshot → exact IVs, then cross-checked with CP/HP.
  * Readings only count when they are the same on two frames in a row, so animations overlapping the CP don't cause errors.
  */
-class IvFeature(ctx: Context) {
+class IvFeature(private val ctx: Context) {
     private val idleText = "Open a Pokémon's page.\nFor exact IVs, tap ☰ → Appraise in the game."
     private val card = TextView(ctx).apply {
         setTextColor(Color.WHITE); textSize = 15f; setPadding(24, 16, 24, 16)
@@ -23,13 +23,16 @@ class IvFeature(ctx: Context) {
     val panel: View get() = card
 
     /** The Pokémon currently on screen (kept while the appraisal covers part of the page). */
-    private data class Mon(val forms: List<Species>, val cp: Int, val hp: Int, val dust: Int?)
+    private data class Mon(val forms: List<Species>, val cp: Int, val hp: Int, val dust: Int?, val nickname: Boolean)
     private var mon: Mon? = null
     private var monSeen = 0L
     private var pendingMon: Mon? = null
     private var pendingIv: Iv? = null
     private var appraised: Iv? = null
     private var shownKey = ""
+    private var arc: ArcReader? = null
+    /** Level-arc dot of the current Pokémon (screen position), if found. */
+    private var dot: Pair<Float, Float>? = null
 
     fun onFrame(tokens: List<Token>, bmp: Bitmap, screenH: Int, now: Long) {
         val read = SummaryParser.parse(tokens, screenH)
@@ -38,12 +41,14 @@ class IvFeature(ctx: Context) {
             show("Loading Pokémon data… (internet needed)" + (SpeciesDb.lastError?.let { "\nLast error: $it" } ?: ""), GREY, "loading")
             return
         }
-        val forms = read?.let { SpeciesDb.find(it.lines) }
-        if (read != null && !forms.isNullOrEmpty()) {
-            val m = Mon(forms, read.cp, read.hp, read.dust)
+        val guess = read?.let { SpeciesDb.guess(tokens, screenH) }
+        if (read != null && guess != null) {
+            val m = Mon(guess.candidates, read.cp, read.hp, read.dust, guess.nickname)
             if (m == pendingMon) { // stable on two frames
-                if (mon?.let { it.forms[0].id != m.forms[0].id || it.cp != m.cp } != false) appraised = null // new Pokémon
+                if (mon?.let { it.forms[0].dex != m.forms[0].dex || it.cp != m.cp } != false) { appraised = null; dot = null } // new Pokémon
                 mon = m; monSeen = now
+                val a = arc ?: ArcReader(ctx, bmp.width, bmp.height).also { arc = it }
+                a.pick(a.findDots(bmp))?.let { d -> dot = d; a.learn(d) }
             }
             pendingMon = m
         }
@@ -69,15 +74,19 @@ class IvFeature(ctx: Context) {
     }
 
     private fun render(m: Mon) {
-        val key = "${m.forms[0].id}-${m.cp}-${m.hp}-${m.dust}-$appraised"
+        val d = dot
+        val arcLevel = d?.let { arc?.level(it) }
+        val key = "${m.forms.map { it.id + it.form }}-${m.cp}-${m.hp}-${m.dust}-$appraised-$arcLevel-${arc?.status()}"
         if (key == shownKey) return
         val ap = appraised
-        val r = IvAnalyzer.analyze(m.forms, m.cp, m.hp, m.dust, ap)
+        val r = IvAnalyzer.analyze(m.forms, m.cp, m.hp, m.dust, ap, arcLevel)
         if (r == null) {
             show("${m.forms[0].name} · CP ${m.cp} · HP ${m.hp}\nNo IV spread fits these numbers.\n" +
                 "Mega / buddy-boosted, or a misread – hold still for a second.", GREY, key)
             return
         }
+        // An appraisal fixed the exact level: use it to calibrate the level arc's end point
+        if (ap != null && r.exact != null && r.levelMin == r.levelMax && d != null) arc?.calibrateMax(d, r.levelMin)
         show(format(r, m, ap), color(r), key)
     }
 
@@ -92,7 +101,9 @@ class IvFeature(ctx: Context) {
     private fun lv(x: Double) = if (x % 1.0 == 0.0) "%.0f".format(x) else "%.1f".format(x)
 
     private fun format(r: IvResult, m: Mon, ap: Iv?): String {
-        val sb = StringBuilder(r.species.label).append('\n')
+        val sb = StringBuilder(r.species.label)
+        if (m.nickname) sb.append("  (nickname – found via candy)")
+        sb.append('\n')
         val e = r.exact
         val level = if (r.levelMin == r.levelMax) "Lv ${lv(r.levelMin)}" else "Lv ${lv(r.levelMin)}–${lv(r.levelMax)}"
         if (e != null) {
@@ -107,6 +118,8 @@ class IvFeature(ctx: Context) {
             ap != null -> sb.append("\nAppraisal ${ap.a}/${ap.d}/${ap.s} didn't match CP – re-open the Pokémon")
             else -> sb.append("\nAppraise in-game for the exact value")
         }
+        if (r.otherForms.isNotEmpty()) sb.append("\nAlso fits: ${r.otherForms.joinToString { it.label }}")
+        arc?.let { sb.append("\n").append(if (r.arcUsed) "arc ✓ used" else it.status()) }
         return sb.toString()
     }
 

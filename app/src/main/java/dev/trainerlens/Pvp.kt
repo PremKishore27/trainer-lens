@@ -8,6 +8,9 @@ object Pvp {
 
     private val cache = HashMap<String, Map<Iv, Rank>?>()
 
+    /** Frees the rank tables (they're ~4,096 entries per species and league). */
+    fun clearCache() = cache.clear()
+
     fun table(sp: Species, capCp: Int, maxLevel: Double = 50.0): Map<Iv, Rank>? =
         cache.getOrPut("${sp.id}-${sp.form}-$capCp-$maxLevel") { build(sp, capCp, maxLevel) }
 
