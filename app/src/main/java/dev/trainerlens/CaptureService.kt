@@ -112,7 +112,7 @@ class CaptureService : Service() {
                     l.boundingBox?.let { Token(l.text, it) }
                 }
                 bag.onTokens(tokens, screenH) // always runs, so the session remembers items even with the panel closed
-                if (tab == Tab.IV) iv.onTokens(tokens, screenH, SystemClock.elapsedRealtime())
+                if (tab == Tab.IV) iv.onFrame(tokens, bmp, screenH, SystemClock.elapsedRealtime())
             }
             .addOnCompleteListener { busy = false; bmp.recycle() }
     }

@@ -6,16 +6,25 @@ data class SummaryRead(val cp: Int, val hp: Int, val dust: Int?, val lines: List
 
 /** Reads CP, max HP and power-up stardust from the Pokémon summary screen (English or German labels). */
 object SummaryParser {
-    private val cpRx = Regex("(?:CP|WP)\\s*(\\d{2,5})", RegexOption.IGNORE_CASE)
-    private val hpRx1 = Regex("(\\d{1,4})\\s*/\\s*(\\d{1,4})\\s*(?:HP|KP)", RegexOption.IGNORE_CASE)
-    private val hpRx2 = Regex("(?:HP|KP)\\s*(\\d{1,4})\\s*/\\s*(\\d{1,4})", RegexOption.IGNORE_CASE)
+    // OCR often confuses digits with look-alike letters, especially when the Pokémon's animation overlaps the CP.
+    private const val D = "[0-9OoDQlI|!SsBZzg]"
+    private val cpRx = Regex("(?:CP|WP|cp|C\\s?P)\\s*($D{2,5})\\b")
+    private val hpRx1 = Regex("($D{1,4})\\s*/\\s*($D{1,4})\\s*(?:HP|KP)", RegexOption.IGNORE_CASE)
+    private val hpRx2 = Regex("(?:HP|KP)\\s*($D{1,4})\\s*/\\s*($D{1,4})", RegexOption.IGNORE_CASE)
+
+    fun digits(s: String): Int? = s.map {
+        when (it) { 'O', 'o', 'D', 'Q' -> '0'; 'l', 'I', '|', '!' -> '1'; 'S', 's' -> '5'; 'B' -> '8'; 'Z', 'z' -> '2'; 'g' -> '9'; else -> it }
+    }.joinToString("").toIntOrNull()
     private val powerUpRx = Regex("power[\\s-]*up", RegexOption.IGNORE_CASE)
 
     fun parse(tokens: List<Token>, screenH: Int): SummaryRead? {
-        val cp = tokens.firstNotNullOfOrNull { cpRx.find(it.text)?.groupValues?.get(1)?.toIntOrNull() } ?: return null
+        // CP is printed in the top part of the screen; ignore "CP" text elsewhere (e.g. move lists)
+        val cp = tokens.filter { it.box.centerY() < screenH * 0.35 }
+            .firstNotNullOfOrNull { cpRx.find(it.text)?.groupValues?.get(1)?.let(::digits) }?.takeIf { it in 10..9999 }
         val hp = tokens.firstNotNullOfOrNull {
-            (hpRx1.find(it.text) ?: hpRx2.find(it.text))?.groupValues?.get(2)?.toIntOrNull()
-        } ?: return null
+            (hpRx1.find(it.text) ?: hpRx2.find(it.text))?.groupValues?.get(2)?.let(::digits)
+        }?.takeIf { it in 10..999 }
+        if (cp == null || hp == null) return null
 
         // Stardust cost candidates: plain numbers in the lower half that are a real power-up cost.
         val dustTokens = tokens
