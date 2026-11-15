@@ -24,12 +24,19 @@ object SummaryParser {
         (hpRx1.find(it.text) ?: hpRx2.find(it.text))?.groupValues?.get(2)?.let(::digits)
     }?.takeIf { it in 10..999 }
 
-    fun parse(tokens: List<Token>, screenH: Int): SummaryRead? {
-        // CP is printed in the top part of the screen; ignore "CP" text elsewhere (e.g. move lists)
+    /** The CP number, printed in the top part of the screen (ignores "CP" text elsewhere, e.g. move lists). */
+    fun cp(tokens: List<Token>, screenH: Int): Int? {
         val top = tokens.filter { it.box.centerY() < screenH * 0.35 }
-        val cp = (top.firstNotNullOfOrNull { cpRx.find(it.text)?.groupValues?.get(1)?.let(::digits)?.takeIf { v -> v in 10..9999 } }
+        return top.firstNotNullOfOrNull { cpRx.find(it.text)?.groupValues?.get(1)?.let(::digits)?.takeIf { v -> v in 10..9999 } }
             ?: top.filter { it.box.centerY() < screenH * 0.15 }
-                .firstNotNullOfOrNull { cpShortRx.matchEntire(it.text.trim())?.groupValues?.get(1)?.let(::digits)?.takeIf { v -> v in 10..9999 } })
+                .firstNotNullOfOrNull { cpShortRx.matchEntire(it.text.trim())?.groupValues?.get(1)?.let(::digits)?.takeIf { v -> v in 10..9999 } }
+    }
+
+    /** A POWER UP button is on screen: this is a Pokémon page (the list and map screens don't have one). */
+    fun hasPowerUp(tokens: List<Token>): Boolean = tokens.any { powerUpRx.containsMatchIn(it.text) }
+
+    fun parse(tokens: List<Token>, screenH: Int): SummaryRead? {
+        val cp = cp(tokens, screenH)
         val hp = hp(tokens)
         if (cp == null || hp == null) return null
 

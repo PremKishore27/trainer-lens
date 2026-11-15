@@ -64,6 +64,20 @@ object Rules {
         ItemRule("Charged TM", NEVER, R),
         ItemRule("Elite Fast TM", NEVER, R),
         ItemRule("Elite Charged TM", NEVER, R),
+        ItemRule("Rocket Radar", NEVER, R),
+        ItemRule("Super Rocket Radar", NEVER, R),
+        ItemRule("Mysterious Component", NEVER, R),
+        ItemRule("Magmarizer", NEVER, R),
+        ItemRule("Electirizer", NEVER, R),
+        ItemRule("Reaper Cloth", NEVER, R),
+        ItemRule("Protector", NEVER, R),
+        ItemRule("Dubious Disc", NEVER, R),
+        ItemRule("Deep Sea Tooth", NEVER, R),
+        ItemRule("Deep Sea Scale", NEVER, R),
+        ItemRule("Razor Claw", NEVER, R),
+        ItemRule("Razor Fang", NEVER, R),
+        ItemRule("Sachet", NEVER, R),
+        ItemRule("Whipped Dream", NEVER, R),
     )
 
     val byName: Map<String, ItemRule> = DEFAULT_RULES.associateBy { it.name }

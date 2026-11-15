@@ -39,6 +39,8 @@ class IvFeature(private val ctx: Context, private val worker: Executor) {
     private var lastScreenH = 0
     private var ocrMs = 0L
     private var analysisMs = 0L
+    private var noHpFrames = 0
+    private var hintShown = false
 
     /** A Pokémon page was read within the last 3 s – worth scanning fast. Otherwise (map, other screens) scan slowly. */
     fun pageRecentlySeen(now: Long) = now - lastSeen < 3_000
@@ -77,6 +79,8 @@ class IvFeature(private val ctx: Context, private val worker: Executor) {
         // (and never attach this Pokémon's appraisal to the previous one).
         val hpNow = if (read == null) SummaryParser.hp(tokens) else read.hp
         if (read == null && hpNow != null && tracker.hpOnly(hpNow)) changed = true
+        // A Pokémon page whose CP is readable but whose HP line isn't: the window is probably covering it.
+        noHpFrames = if (read == null && hpNow == null && SummaryParser.hasPowerUp(tokens) && SummaryParser.cp(tokens, screenH) != null) noHpFrames + 1 else 0
         val bars = AppraisalReader.read(tokens, bmp)
         if (bars != null && tracker.current != null && (read != null || hpNow == tracker.current?.hp)) {
             if (tracker.observeBars(bars)) { lastSeen = now; changed = true }
@@ -94,6 +98,15 @@ class IvFeature(private val ctx: Context, private val worker: Executor) {
             analysisMs = (System.nanoTime() - t0) / 1_000_000
             return
         }
+
+        if (noHpFrames >= 3) {
+            lastSeen = now; settled = false; hintShown = true
+            show(CardModels.message("Can't read the HP line",
+                "This window is covering the Pokémon's name, HP or type lines.\nDrag it up or down, or hide it with –."))
+            analysisMs = (System.nanoTime() - t0) / 1_000_000
+            return
+        }
+        if (hintShown) { hintShown = false; shown = null } // the page is readable again: show the Pokémon, not the hint
 
         if (now - lastSeen > 5_000) { // no Pokémon page for a while
             tracker.reset(); settled = false
@@ -137,6 +150,8 @@ class IvFeature(private val ctx: Context, private val worker: Executor) {
             val clues = d?.let { SpeciesDb.readClues(lastTokens, lastScreenH, it) }
             val txt = buildString {
                 append("Trainer Lens ${BuildConfig.VERSION_NAME} · IV · screen height $lastScreenH · OCR ${ocrMs} ms · analysis ${analysisMs} ms\n")
+                append("Overlay: ${Diag.line}\n")
+                append("Read: cp=${SummaryParser.cp(lastTokens, lastScreenH)} hp=${SummaryParser.hp(lastTokens)} powerUp=${SummaryParser.hasPowerUp(lastTokens)} noHpFrames=$noHpFrames\n")
                 append("Clues: names=${clues?.names?.map { it.label }} family=${clues?.family?.map { it.name }?.distinct()} types=${clues?.types} " +
                     "size=${clues?.heightM}m/${clues?.weightKg}kg evolve=${clues?.evolveCost} caught=${clues?.caught?.map { it.name }?.distinct()}\n")
                 tracker.current?.let { append("Pokémon: CP ${it.cp} HP ${it.hp} dust ${it.dust} frames ${it.frames} appraised ${it.appraised}\n") }

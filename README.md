@@ -89,7 +89,9 @@ Tested on: Motorola Signature (Android 17). Requires Android 8.0 or newer.
 ### 🎒 Bag advisor
 1. In Pokémon GO open **Items**. Tap 🔍 → **🎒 Bag** (tap **Reset** to start fresh).
 2. Scroll **slowly** through the whole list. The session **remembers** every item it reads (*remembered: N item types*) until you tap **Reset** or **Stop** – even with the panel closed.
-   A count is only accepted when it's read the same on two frames in a row (the list isn't moving), and rows cut off at the screen edge are ignored, so scrolling doesn't create wrong numbers.
+   While the Items list is on screen the app scans about 3 times a second. A count is **confirmed** when it is read the same on two frames;
+   an item seen only once is still remembered (it counts in *N types*) but is listed under *Seen once – scroll slower to confirm* and is kept out of the discard advice until it is seen again.
+   Rows cut off at the screen edge are ignored. Tip: close the panel (**–**) while you scroll, so it doesn't cover part of the list.
 3. Read the panel:
    - Items are sorted by **rarity**: **Common** (Potion, Super Potion, Nanab, Revive, Poké Ball, Hyper Potion, Razz, Great Ball, Pinap) are suggested first,
      then **Uncommon** (Max Potion, Max Revive, Ultra Ball, Silver Pinap) – only their surplus. **Rare** items are never suggested.
@@ -105,7 +107,8 @@ Tested on: Motorola Signature (Android 17). Requires Android 8.0 or newer.
 Keep limits and rarity are in [`Rules.kt`](app/src/main/java/dev/trainerlens/Rules.kt) – earlier items in the list are suggested first.
 
 ### 📊 IV checker
-Tap 🔍 → **📊 IV**, then open a Pokémon. For the **exact** result, appraise it in-game (☰ → Appraise) and keep the bars on screen for a second.
+Tap 🔍 → **📊 IV**, then open a Pokémon. The window opens in the free band between the CP line and the HP line, so it hides nothing the app reads; drag it by its top bar if you want it elsewhere.
+If it covers the Pokémon's HP / name / type lines, the card says **Can't read the HP line** – drag the window up or down. For the **exact** result, appraise it in-game (☰ → Appraise) and keep the bars on screen for a second.
 The card shows:
 - **IV % out of 100** – 15/15/15 = 100 %, 12/13/13 = 38/45 = **84 %** – with the spread and a rating (Perfect / Excellent / Good / Decent / Weak).
 - **Level**, CP and HP.

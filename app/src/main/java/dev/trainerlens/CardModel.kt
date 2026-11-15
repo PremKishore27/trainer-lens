@@ -112,7 +112,7 @@ object CardModels {
             ),
             leagues = leagues(r, m.cp),
             status = status,
-            others = r.others.distinctBy { it.label }.take(3),
+            others = r.others.distinctBy { it.label }.take(2),
         )
     }
 }

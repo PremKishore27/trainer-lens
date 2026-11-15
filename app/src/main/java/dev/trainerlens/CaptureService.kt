@@ -17,6 +17,7 @@ import android.hardware.display.VirtualDisplay
 import android.media.ImageReader
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
+import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -26,6 +27,7 @@ import android.view.MotionEvent
 import android.view.ViewConfiguration
 import android.view.View
 import android.view.WindowManager
+import android.util.DisplayMetrics
 import android.util.TypedValue
 import android.view.ViewGroup
 import android.widget.TextView
@@ -109,6 +111,7 @@ class CaptureService : Service() {
                 else -> 500L                                                       // no Pokémon page on screen: don't burn battery
             }
             ivActive() -> 500L
+            ::bag.isInitialized && bag.recentlySeen(SystemClock.elapsedRealtime()) -> 300L // scrolling the Items list: don't miss rows
             else -> 1000L
         }
         main.postDelayed(scanTask, delay)
@@ -127,9 +130,12 @@ class CaptureService : Service() {
             val pad = (p.rowStride - p.pixelStride * img.width) / p.pixelStride
             val full = Bitmap.createBitmap(img.width + pad, img.height, Bitmap.Config.ARGB_8888)
             full.copyPixelsFromBuffer(p.buffer)
-            bmp = if (pad == 0) full else Bitmap.createBitmap(full, 0, 0, img.width, img.height).also { full.recycle() }
+            bmp = if (pad == 0) full else Bitmap.createBitmap(img.width, img.height, Bitmap.Config.ARGB_8888).also {
+                Canvas(it).drawBitmap(full, 0f, 0f, null) // a copy we can paint on; the cropped view of `full` may be immutable
+                full.recycle()
+            }
         } finally { img.close() }
-        maskOverlay(bmp)
+        try { maskOverlay(bmp) } catch (e: Exception) { Diag.line = "mask failed: $e" }
         val t0 = SystemClock.elapsedRealtime()
         recognizer.process(InputImage.fromBitmap(bmp, 0))
             .addOnSuccessListener { text ->
@@ -177,14 +183,17 @@ class CaptureService : Service() {
         val svc = this
         val m = resources.displayMetrics
         fun dp(v: Int) = Ui.dp(svc, v)
-        panelW = minOf(dp(PANEL_W_DP), m.widthPixels - dp(16))
+        panelW = OverlayLayout.panelWidthPx(m.widthPixels, m.density)
         bubbleSize = dp(52)
         bubblePos[0] = m.widthPixels - bubbleSize - dp(8); bubblePos[1] = dp(160)
+        // the panel opens below the CP line and above the HP / type lines, where it hides nothing the IV checker reads
+        val r0 = OverlayLayout.panelRect(m.widthPixels, m.heightPixels, m.density)
+        panelPos[0] = r0.left; panelPos[1] = r0.top; panelPlaced = true
 
         lp = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE, PixelFormat.TRANSLUCENT
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL, PixelFormat.TRANSLUCENT
         ).apply { gravity = Gravity.TOP or Gravity.START; x = bubblePos[0]; y = bubblePos[1] }
 
         val bubble = TextView(this).apply {
@@ -201,8 +210,8 @@ class CaptureService : Service() {
             orientation = LinearLayout.HORIZONTAL
             background = Ui.rounded(svc, Ui.CHIP, 11f)
             setPadding(dp(2), dp(2), dp(2), dp(2))
-            addView(tabIv, LinearLayout.LayoutParams(dp(52), dp(26)))
-            addView(tabBag, LinearLayout.LayoutParams(dp(52), dp(26)))
+            addView(tabIv, LinearLayout.LayoutParams(dp(46), dp(Metrics.TOP_BAR - 4)))
+            addView(tabBag, LinearLayout.LayoutParams(dp(46), dp(Metrics.TOP_BAR - 4)))
         }
         val dragArea = FrameLayout(this).apply {
             addView(View(svc).apply { background = Ui.rounded(svc, Ui.CHIP_ACTIVE, 2f) }, FrameLayout.LayoutParams(dp(28), dp(4), Gravity.CENTER))
@@ -211,20 +220,20 @@ class CaptureService : Service() {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
             addView(seg)
             addView(dragArea, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
-            addView(Ui.button(svc, "–") { setExpanded(false) }, LinearLayout.LayoutParams(dp(36), dp(28)).apply { marginEnd = dp(6) })
-            addView(Ui.button(svc, "Stop") { stopSelf() }, LinearLayout.LayoutParams(dp(54), dp(28)))
+            addView(Ui.button(svc, "–", 4) { setExpanded(false) }, LinearLayout.LayoutParams(dp(34), dp(Metrics.TOP_BAR)).apply { marginEnd = dp(5) })
+            addView(Ui.button(svc, "Stop", 4) { stopSelf() }, LinearLayout.LayoutParams(dp(46), dp(Metrics.TOP_BAR)))
         }
 
         contentFrame = FrameLayout(this).apply {
             background = Ui.rounded(svc, Ui.WELL, 16f)
-            setPadding(dp(12), dp(12), dp(12), dp(12))
+            setPadding(dp(Metrics.CONTENT_PAD), dp(Metrics.CONTENT_PAD), dp(Metrics.CONTENT_PAD), dp(Metrics.CONTENT_PAD))
         }
         val panel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             background = Ui.rounded(svc, Ui.GLASS, 22f, Ui.GLASS_STROKE)
-            setPadding(dp(10), dp(10), dp(10), dp(10))
-            addView(topBar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(30)))
-            addView(contentFrame, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(CONTENT_H_DP)).apply { topMargin = dp(8) })
+            setPadding(dp(Metrics.WINDOW_PAD), dp(Metrics.WINDOW_PAD), dp(Metrics.WINDOW_PAD), dp(Metrics.WINDOW_PAD))
+            addView(topBar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(Metrics.TOP_BAR)))
+            addView(contentFrame, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(Metrics.CONTENT_H)).apply { topMargin = dp(Metrics.GAP) })
             visibility = View.GONE
         }
         panelView = panel
@@ -257,10 +266,6 @@ class CaptureService : Service() {
         panelOpen = open
         bubbleView.visibility = if (open) View.GONE else View.VISIBLE
         panelView.visibility = if (open) View.VISIBLE else View.GONE
-        if (open && !panelPlaced) { // first time: open with its right edge under the bubble
-            panelPlaced = true
-            panelPos[0] = bubblePos[0] + bubbleSize - panelW; panelPos[1] = bubblePos[1]
-        }
         val pos = if (open) panelPos else bubblePos
         lp.x = pos[0]; lp.y = pos[1]
         menuRoot?.let { b ->
@@ -306,17 +311,23 @@ class CaptureService : Service() {
         if (b.width == 0 || b.height == 0 || !b.isAttachedToWindow) return
         val loc = IntArray(2)
         b.getLocationOnScreen(loc)
-        val pad = Ui.dp(this, 2)
-        Canvas(bmp).drawRect(
-            (loc[0] - pad).toFloat(), (loc[1] - pad).toFloat(),
-            (loc[0] + b.width + pad).toFloat(), (loc[1] + b.height + pad).toFloat(), maskPaint
-        )
+        val win = Box(loc[0], loc[1], loc[0] + b.width, loc[1] + b.height)
+        val (rw, rh) = realDisplaySize()
+        val r = OverlayMask.map(win, rw, rh, bmp.width, bmp.height, Ui.dp(this, 3))
+        Canvas(bmp).drawRect(r.left.toFloat(), r.top.toFloat(), r.right.toFloat(), r.bottom.toFloat(), maskPaint)
+        val m = resources.displayMetrics
+        Diag.line = "window=${win.left},${win.top},${win.right},${win.bottom} mask=${r.left},${r.top},${r.right},${r.bottom} " +
+            "bitmap=${bmp.width}x${bmp.height} realDisplay=${rw}x$rh metrics=${m.widthPixels}x${m.heightPixels} density=${m.density}"
     }
 
-    private companion object {
-        const val PANEL_W_DP = 300
-        const val CONTENT_H_DP = 288
-    }
+    /** Full size of the display, including the system bars (the app's display metrics can leave them out). */
+    private fun realDisplaySize(): Pair<Int, Int> =
+        if (Build.VERSION.SDK_INT >= 30) wm.maximumWindowMetrics.bounds.let { it.width() to it.height() }
+        else {
+            val dm = DisplayMetrics()
+            @Suppress("DEPRECATION") wm.defaultDisplay.getRealMetrics(dm)
+            dm.widthPixels to dm.heightPixels
+        }
 
     override fun onDestroy() {
         destroyed = true

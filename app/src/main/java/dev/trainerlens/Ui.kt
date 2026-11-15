@@ -54,11 +54,11 @@ object Ui {
     }
 
     /** A pill-shaped tap target: no Android Button chrome, so it looks the same on every phone. */
-    fun button(ctx: Context, text: String, onClick: () -> Unit): TextView =
+    fun button(ctx: Context, text: String, padH: Int = 10, onClick: () -> Unit): TextView =
         label(ctx, 12f, TEXT, gravity = Gravity.CENTER).apply {
             this.text = text
             background = rounded(ctx, CHIP, 10f)
-            setPadding(dp(ctx, 10), 0, dp(ctx, 10), 0)
+            setPadding(dp(ctx, padH), 0, dp(ctx, padH), 0)
             isClickable = true
             setOnClickListener { onClick() }
         }
@@ -115,16 +115,16 @@ class RingView(ctx: Context) : View(ctx) {
 
     override fun onDraw(canvas: Canvas) {
         val d = resources.displayMetrics.density
-        val sw = 6f * d
+        val sw = 5f * d
         track.strokeWidth = sw; arc.strokeWidth = sw
         val pad = sw / 2f + d
         rect.set(pad, pad, width - pad, height - pad)
         canvas.drawArc(rect, 0f, 360f, false, track)
         canvas.drawArc(rect, -90f, 360f * fraction.coerceIn(0f, 1f), false, arc)
-        big.textSize = sp(if (bigText.length > 4) 15f else 22f)
-        small.textSize = sp(11f)
+        big.textSize = sp(if (bigText.length > 4) 12f else 17f)
+        small.textSize = sp(10f)
         val cx = width / 2f; val cy = height / 2f
-        canvas.drawText(bigText, cx, cy + 2f * d, big)
-        canvas.drawText(smallText, cx, cy + 17f * d, small)
+        canvas.drawText(bigText, cx, cy + 1f * d, big)
+        canvas.drawText(smallText, cx, cy + 13f * d, small)
     }
 }
