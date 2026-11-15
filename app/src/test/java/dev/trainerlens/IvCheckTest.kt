@@ -1,6 +1,5 @@
 package dev.trainerlens
 
-import android.graphics.Rect
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -18,8 +17,8 @@ import kotlin.math.roundToInt
  */
 class IvCheckTest {
     private fun res(name: String) = javaClass.classLoader!!.getResource(name)!!.readText()
-    private val db by lazy { SpeciesDb.build(res("pokemon_stats.json"), res("pokemon_types.json"), res("pokemon_evolutions.json")) }
-    private fun tok(text: String) = Token(text, Rect())
+    private val db by lazy { SpeciesDb.build(res("pokemon_stats.json"), res("pokemon_types.json"), res("pokemon_evolutions.json"), res("pokemon_height_weight_scale.json")) }
+    private fun tok(text: String) = Token(text)
 
     @Test fun cpMultiplierMatchesGameMaster() {
         val arr = JSONArray(res("cp_multiplier.json"))

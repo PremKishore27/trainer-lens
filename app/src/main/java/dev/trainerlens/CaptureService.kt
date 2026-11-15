@@ -30,6 +30,7 @@ import android.widget.ScrollView
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import java.util.concurrent.Executors
 import kotlin.math.abs
 
 /**
@@ -45,7 +46,9 @@ class CaptureService : Service() {
     private lateinit var reader: ImageReader
     private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
     private val main = Handler(Looper.getMainLooper())
-    private var busy = false
+    private val worker = Executors.newSingleThreadExecutor()
+    private var destroyed = false
+    private var panelOpen = false
     private var screenH = 0
 
     private lateinit var bag: BagFeature
@@ -65,7 +68,7 @@ class CaptureService : Service() {
         }, main)
         wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         bag = BagFeature(this)
-        iv = IvFeature(this)
+        iv = IvFeature(this, worker)
         SpeciesDb.ensureLoaded(SystemClock.elapsedRealtime())
         setupMenu()
         setupCapture()
@@ -89,33 +92,55 @@ class CaptureService : Service() {
             "lens", m.widthPixels, m.heightPixels, m.densityDpi,
             DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, reader.surface, null, main
         )
-        main.post(object : Runnable {
-            override fun run() { scanOnce(); main.postDelayed(this, 1000) }
-        })
+        main.post(scanTask)
     }
 
+    /** Next scan: fast while the IV tab is open and a Pokémon is changing, slower when nothing moves (saves battery). */
+    private fun scheduleNext() {
+        if (destroyed) return
+        val delay = when {
+            ivActive() -> if (::iv.isInitialized && iv.settled) 300L else 100L
+            else -> 1000L
+        }
+        main.postDelayed(scanTask, delay)
+    }
+
+    private fun ivActive() = panelOpen && tab == Tab.IV
+
+    private val scanTask = Runnable { scanOnce() }
+
     private fun scanOnce() {
-        if (busy) return
-        val img = reader.acquireLatestImage() ?: return
+        val img = try { reader.acquireLatestImage() } catch (e: Exception) { null }
+        if (img == null) { scheduleNext(); return }
         val bmp: Bitmap
         try {
             val p = img.planes[0]
             val pad = (p.rowStride - p.pixelStride * img.width) / p.pixelStride
             val full = Bitmap.createBitmap(img.width + pad, img.height, Bitmap.Config.ARGB_8888)
             full.copyPixelsFromBuffer(p.buffer)
-            bmp = Bitmap.createBitmap(full, 0, 0, img.width, img.height)
+            bmp = if (pad == 0) full else Bitmap.createBitmap(full, 0, 0, img.width, img.height).also { full.recycle() }
         } finally { img.close() }
-        busy = true
+        val t0 = SystemClock.elapsedRealtime()
         recognizer.process(InputImage.fromBitmap(bmp, 0))
             .addOnSuccessListener { text ->
+                val ocrMs = SystemClock.elapsedRealtime() - t0
                 val tokens = text.textBlocks.flatMap { it.lines }.mapNotNull { l ->
-                    l.boundingBox?.let { Token(l.text, it) }
+                    l.boundingBox?.let { Token(l.text, Box.of(it)) }
                 }
                 bag.onTokens(tokens, screenH) // always runs, so the session remembers items even with the panel closed
-                if (tab == Tab.IV) iv.onFrame(tokens, bmp, screenH, SystemClock.elapsedRealtime())
+                if (ivActive()) {
+                    // heavy IV work off the main thread; the bitmap is released when it's done
+                    worker.execute {
+                        try { iv.onFrame(tokens, bmp, screenH, SystemClock.elapsedRealtime(), ocrMs) }
+                        catch (e: Exception) { /* a bad frame must never stop the scan loop */ }
+                        finally { main.post { frameDone(bmp) } }
+                    }
+                } else frameDone(bmp)
             }
-            .addOnCompleteListener { busy = false; bmp.recycle() }
+            .addOnFailureListener { frameDone(bmp) }
     }
+
+    private fun frameDone(bmp: Bitmap) { bmp.recycle(); scheduleNext() }
 
     private enum class Tab { BAG, IV }
     private var tab: Tab? = null
@@ -180,6 +205,7 @@ class CaptureService : Service() {
                     if (!dragging) {
                         val open = panel.visibility != View.VISIBLE
                         panel.visibility = if (open) View.VISIBLE else View.GONE
+                        panelOpen = open
                         if (open && tab == null) select(Tab.BAG)
                         // keep the opened panel on screen
                         box.post {
@@ -205,7 +231,9 @@ class CaptureService : Service() {
     }
 
     override fun onDestroy() {
+        destroyed = true
         main.removeCallbacksAndMessages(null)
+        worker.shutdown()
         menuRoot?.let { runCatching { wm.removeView(it) } }
         display?.release()
         if (::projection.isInitialized) projection.stop()

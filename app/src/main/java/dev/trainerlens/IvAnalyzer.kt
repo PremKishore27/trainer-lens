@@ -10,10 +10,14 @@ data class IvResult(
     val little: RankRange?,
     val great: RankRange?,
     val ultra: RankRange?,
-    /** Other forms of the same Pokémon (e.g. Alolan) that also fit the numbers. */
-    val otherForms: List<Species>,
+    /** Every other candidate species that also fits the CP / HP / stardust (most likely first). */
+    val others: List<Species>,
     /** true when the level arc narrowed the result. */
     val arcUsed: Boolean = false,
+    /** true when the name/candy didn't fit and the species was searched from types / size instead. */
+    val guessed: Boolean = false,
+    /** true when the name on screen is a nickname and the candy family was used. */
+    val nickname: Boolean = false,
 ) {
     val candidates: List<Iv> get() = fits.map { it.iv }.distinct()
     val pctMin get() = candidates.minOf { it.pct }
@@ -61,7 +65,7 @@ object IvAnalyzer {
         return IvResult(
             sp, fits,
             range(sp, 500, ivs), range(sp, 1500, ivs), range(sp, 2500, ivs),
-            matched.map { it.first }.filter { it != sp && it.name == sp.name },
+            matched.map { it.first }.filter { it != sp },
             arcUsed,
         )
     }

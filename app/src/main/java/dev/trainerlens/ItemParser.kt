@@ -3,8 +3,17 @@ package dev.trainerlens
 import android.graphics.Rect
 import kotlin.math.abs
 
+/** A rectangle on screen (pixels). Same accessors as android.graphics.Rect, but usable in plain JVM tests. */
+data class Box(val left: Int, val top: Int, val right: Int, val bottom: Int) {
+    fun centerX() = (left + right) / 2
+    fun centerY() = (top + bottom) / 2
+    fun width() = right - left
+    fun height() = bottom - top
+    companion object { fun of(r: Rect) = Box(r.left, r.top, r.right, r.bottom) }
+}
+
 /** One OCR text element with its position on screen. */
-data class Token(val text: String, val box: Rect)
+data class Token(val text: String, val box: Box = Box(0, 0, 0, 0))
 
 data class ParsedScreen(val counts: Map<String, Int>, val used: Int?, val capacity: Int?)
 
@@ -37,7 +46,7 @@ object ItemParser {
 
         // Rows that are cut off at the top or bottom of the screen while scrolling are the main source of
         // wrong pairs (a name whose own count is off-screen grabs the neighbour's count), so skip them.
-        fun inSafeArea(r: Rect) = screenH <= 0 || (r.top > screenH * 0.08 && r.bottom < screenH * 0.94)
+        fun inSafeArea(r: Box) = screenH <= 0 || (r.top > screenH * 0.08 && r.bottom < screenH * 0.94)
 
         val counts = mutableMapOf<String, Int>()
         val names = ArrayList<Pair<Token, String>>()

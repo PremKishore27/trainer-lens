@@ -9,18 +9,21 @@ object Pvp {
     private val cache = HashMap<String, Map<Iv, Rank>?>()
 
     /** Frees the rank tables (they're ~4,096 entries per species and league). */
-    fun clearCache() = cache.clear()
+    @Synchronized fun clearCache() = cache.clear()
 
-    fun table(sp: Species, capCp: Int, maxLevel: Double = 50.0): Map<Iv, Rank>? =
+    @Synchronized fun table(sp: Species, capCp: Int, maxLevel: Double = 50.0): Map<Iv, Rank>? =
         cache.getOrPut("${sp.id}-${sp.form}-$capCp-$maxLevel") { build(sp, capCp, maxLevel) }
 
     private fun build(sp: Species, capCp: Int, maxLevel: Double): Map<Iv, Rank>? {
-        val levels = Cpm.levels(maxLevel).reversed()
+        val levels = Cpm.levels(maxLevel) // ascending; CP never goes down with level, so binary search works
         class Row(val iv: Iv, val level: Double, val product: Double)
         val rows = ArrayList<Row>(4096)
         for (a in 0..15) for (d in 0..15) for (s in 0..15) {
             val iv = Iv(a, d, s)
-            val lv = levels.firstOrNull { Cpm.cp(sp, iv, it) <= capCp } ?: return null // species can't fit the league
+            if (Cpm.cp(sp, iv, levels[0]) > capCp) return null // species can't fit the league
+            var lo = 0; var hi = levels.size - 1 // highest level whose CP is still within the cap
+            while (lo < hi) { val mid = (lo + hi + 1) / 2; if (Cpm.cp(sp, iv, levels[mid]) <= capCp) lo = mid else hi = mid - 1 }
+            val lv = levels[lo]
             val c = Cpm.at(lv)
             rows += Row(iv, lv, (sp.atk + a) * c * (sp.def + d) * c * floor((sp.hp + s) * c))
         }

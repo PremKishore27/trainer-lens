@@ -3,6 +3,9 @@ package dev.trainerlens
 import org.json.JSONArray
 import java.net.HttpURLConnection
 import java.net.URL
+import kotlin.math.abs
+import kotlin.math.hypot
+import kotlin.math.ln
 
 /**
  * One Pokémon form with its own base stats. [form] is "Normal" for the default form, otherwise e.g. "Alola",
@@ -34,7 +37,24 @@ data class Iv(val a: Int, val d: Int, val s: Int) {
     }
 }
 
-/** What's known about the Pokémon on screen, used to pick the species. */
+/**
+ * Everything one screenshot of a Pokémon page says about *which* Pokémon it is. Nothing here needs the name,
+ * because the name line shows the nickname:
+ *  - [names]: a line that is a Pokémon name (the player didn't rename it, or renamed it to another species' name)
+ *  - [family]: the evolution family from the "<SPECIES> CANDY" label
+ *  - [types]: the type line, which separates regional forms
+ *  - [heightM] / [weightKg]: the size shown under the Pokémon, compared with each species' average
+ *  - [evolveCost]: the candy number on the EVOLVE button, which identifies the stage inside a family
+ */
+data class Clues(
+    val names: List<Species> = emptyList(),
+    val family: List<Species>? = null,
+    val types: Set<String> = emptySet(),
+    val heightM: Double? = null,
+    val weightKg: Double? = null,
+    val evolveCost: Int? = null,
+)
+
 data class SpeciesGuess(
     /** Candidates, most likely first. */
     val candidates: List<Species>,
@@ -43,8 +63,8 @@ data class SpeciesGuess(
 )
 
 /**
- * Pokémon data from the community-maintained pogoapi.net database: base stats, types and evolution families.
- * Fetched at runtime and kept in memory only, so new Pokémon appear without an app update.
+ * Pokémon data from the community-maintained pogoapi.net database: base stats, types, sizes and evolution
+ * families. Fetched at runtime and kept in memory only, so new Pokémon appear without an app update.
  */
 object SpeciesDb {
     private const val BASE = "https://pogoapi.net/api/v1/"
@@ -54,6 +74,7 @@ object SpeciesDb {
     @Volatile var lastError: String? = null; private set
 
     val ready: Boolean get() = data != null
+    fun get(): Data? = data
 
     val TYPES = setOf(
         "normal", "fire", "water", "grass", "electric", "ice", "fighting", "poison", "ground",
@@ -65,8 +86,14 @@ object SpeciesDb {
         val byName: Map<String, List<Species>>,
         /** dex number -> every form of every Pokémon in the same evolution family */
         val family: Map<Int, List<Species>>,
+        /** (dex, lower-case form) -> average (height m, weight kg) */
+        val size: Map<Pair<Int, String>, Pair<Double, Double>>,
+        /** dex -> candy costs of its evolutions (what the EVOLVE button can show) */
+        val evolveCosts: Map<Int, Set<Int>>,
     ) {
         val namesLongestFirst: List<String> = byName.keys.sortedByDescending { it.length }
+        val all: List<Species> = byName.values.flatten()
+        val allEvolveCosts: Set<Int> = evolveCosts.values.flatten().toSet()
     }
 
     /** Starts a background fetch if nothing is loaded yet (at most one try per 15 s). */
@@ -75,7 +102,8 @@ object SpeciesDb {
         loading = true; lastAttempt = now
         Thread {
             try {
-                data = build(fetch("pokemon_stats.json"), fetch("pokemon_types.json"), fetch("pokemon_evolutions.json"))
+                val sizes = runCatching { fetch("pokemon_height_weight_scale.json") }.getOrNull() // optional extra clue
+                data = build(fetch("pokemon_stats.json"), fetch("pokemon_types.json"), fetch("pokemon_evolutions.json"), sizes)
                 lastError = null
             } catch (e: Exception) {
                 lastError = e.message ?: "network error"
@@ -89,8 +117,8 @@ object SpeciesDb {
         return c.inputStream.bufferedReader().use { it.readText() }
     }
 
-    /** Builds the lookup tables from the three pogoapi.net JSON files (also used by the unit tests). */
-    fun build(statsJson: String, typesJson: String, evolutionsJson: String): Data {
+    /** Builds the lookup tables from the pogoapi.net JSON files (also used by the unit tests). */
+    fun build(statsJson: String, typesJson: String, evolutionsJson: String, sizesJson: String? = null): Data {
         // types per (dex, form); forms without their own entry use the Normal form's types
         val types = HashMap<Pair<Int, String>, Set<String>>()
         JSONArray(typesJson).let { arr ->
@@ -120,16 +148,22 @@ object SpeciesDb {
         byName.values.forEach { l -> l.sortBy { if (it.isNormal) 0 else 1 } }
         byName.values.flatten().forEach { byDex.getOrPut(it.dex) { mutableListOf() }.add(it) }
 
-        // evolution families by union-find over dex numbers
+        // evolution families by union-find over dex numbers, plus the candy cost of each evolution
         val parent = HashMap<Int, Int>()
         fun root(x: Int): Int { var r = x; while (parent[r] != null && parent[r] != r) r = parent[r]!!; return r }
         fun union(a: Int, b: Int) { val ra = root(a); val rb = root(b); if (ra != rb) parent[maxOf(ra, rb)] = minOf(ra, rb) }
+        val evolveCosts = HashMap<Int, MutableSet<Int>>()
         JSONArray(evolutionsJson).let { arr ->
             for (i in 0 until arr.length()) {
                 val o = arr.getJSONObject(i)
                 val from = o.getInt("pokemon_id")
                 val evos = o.optJSONArray("evolutions") ?: continue
-                for (j in 0 until evos.length()) union(from, evos.getJSONObject(j).getInt("pokemon_id"))
+                for (j in 0 until evos.length()) {
+                    val e = evos.getJSONObject(j)
+                    union(from, e.getInt("pokemon_id"))
+                    val cost = e.optInt("candy_required", 0)
+                    if (cost > 0) evolveCosts.getOrPut(from) { mutableSetOf() }.add(cost)
+                }
             }
         }
         val members = byDex.keys.groupBy { root(it) }
@@ -138,47 +172,120 @@ object SpeciesDb {
             val all = dexes.sorted().flatMap { byDex[it]!! }
             dexes.forEach { family[it] = all }
         }
-        return Data(byName, family)
+        val size = HashMap<Pair<Int, String>, Pair<Double, Double>>()
+        sizesJson?.let { js ->
+            val arr = JSONArray(js)
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                size[o.getInt("pokemon_id") to o.optString("form", "Normal").lowercase()] =
+                    o.getDouble("pokedex_height") to o.getDouble("pokedex_weight")
+            }
+        }
+        return Data(byName, family, size, evolveCosts)
     }
 
-    private val candyRx = Regex("^\\d*(.+?)(?:candyxl|candy|bonbonxl|bonbon|xlbonbon)$")
+    // ---------------------------------------------------------------------------------------------------------
+    // Reading the clues from one frame
+    // ---------------------------------------------------------------------------------------------------------
+
+    private val candyRx = Regex("candy|bonbon", RegexOption.IGNORE_CASE)
+    private val evolveRx = Regex("evolve|entwickel", RegexOption.IGNORE_CASE)
+    private val powerUpRx = Regex("power[\\s-]*up", RegexOption.IGNORE_CASE)
+    private val kgRx = Regex("(\\d{1,4}[.,]\\d{1,2})\\s*kg", RegexOption.IGNORE_CASE)
+    private val mRx = Regex("(\\d{1,2}[.,]\\d{1,2})\\s*m(?![a-zA-Z])", RegexOption.IGNORE_CASE)
+
+    /** Reads every identity clue from the OCR tokens of one frame. */
+    fun readClues(tokens: List<Token>, screenH: Int, d: Data? = data): Clues {
+        d ?: return Clues()
+        val (family, consumed) = candyFamily(tokens, d)
+
+        // A line that is exactly a Pokémon name is the species (or a nickname equal to a species name).
+        // Tokens that were used as part of the candy label ("DRATINI" next to "CANDY") are not names.
+        val names = LinkedHashSet<Species>()
+        for ((i, t) in tokens.withIndex()) if (i !in consumed) d.byName[Rules.norm(t.text)]?.let { names += it }
+        if (names.isEmpty()) for ((i, t) in tokens.withIndex()) {
+            if (i in consumed) continue
+            val n = Rules.norm(t.text)
+            d.namesLongestFirst.firstOrNull { it.length >= 5 && n.contains(it) && n.length <= it.length + 6 }?.let { names += d.byName[it]!! }
+        }
+
+        val height = tokens.firstNotNullOfOrNull { mRx.find(it.text)?.groupValues?.get(1)?.replace(',', '.')?.toDoubleOrNull() }
+        val weight = tokens.firstNotNullOfOrNull { kgRx.find(it.text)?.groupValues?.get(1)?.replace(',', '.')?.toDoubleOrNull() }
+        return Clues(names.toList(), family, typesOnScreen(tokens, screenH), height, weight, evolveCost(tokens, screenH, d))
+    }
+
+    /** Candy-cost number on the EVOLVE button, e.g. 25 (Dratini) or 100 (Dragonair). */
+    private fun evolveCost(tokens: List<Token>, screenH: Int, d: Data): Int? {
+        val ev = tokens.firstOrNull { evolveRx.containsMatchIn(it.text) } ?: return null
+        Regex("\\d{2,3}").findAll(ev.text).map { it.value.toInt() }.firstOrNull { it in d.allEvolveCosts }?.let { return it }
+        val reach = if (screenH > 0) screenH * 0.12 else Double.MAX_VALUE
+        return tokens.filter { it !== ev }
+            .mapNotNull { t -> t.text.trim().toIntOrNull()?.takeIf { it in d.allEvolveCosts }?.let { t to it } }
+            .filter { (t, _) -> dist(t.box, ev.box) <= reach }
+            .minByOrNull { (t, _) -> dist(t.box, ev.box) }?.second
+    }
+
+    private fun dist(a: Box, b: Box) = hypot((a.centerX() - b.centerX()).toDouble(), (a.centerY() - b.centerY()).toDouble())
 
     /**
-     * Works out which Pokémon is on screen from the OCR lines:
-     *  - the name line (exact match, then a line that contains a name),
-     *  - the "<SPECIES> CANDY" line: candy is shared by the whole evolution family, so it still works for nicknamed
-     *    Pokémon and tells apart a nickname that happens to be another Pokémon's name,
-     *  - the type line ("GRASS / DRAGON"), which separates regional forms such as Alolan Exeggutor.
+     * Finds the evolution family from a "<SPECIES> CANDY" label. Tolerates a count in front ("245 DRATINI CANDY"),
+     * a "CANDY XL" label, one wrong letter, and OCR splitting the label into "DRATINI" and "CANDY" lines.
+     * Returns the family plus the indices of every token that belonged to the label.
      */
-    fun guess(tokens: List<Token>, screenH: Int, d: Data? = data): SpeciesGuess? {
-        d ?: return null
-        val norms = tokens.map { Rules.norm(it.text) }
-        val named = LinkedHashSet<Species>()
-        for (n in norms) d.byName[n]?.let { named += it }
-        if (named.isEmpty()) for (n in norms) {
-            if (n.endsWith("candy") || n.endsWith("candyxl")) continue
-            d.namesLongestFirst.firstOrNull { it.length >= 5 && n.contains(it) && n.length <= it.length + 6 }?.let { named += d.byName[it]!! }
+    private fun candyFamily(tokens: List<Token>, d: Data): Pair<List<Species>?, Set<Int>> {
+        val consumed = HashSet<Int>()
+        var family: List<Species>? = null
+        for ((i, t) in tokens.withIndex()) {
+            val m = candyRx.find(t.text) ?: continue
+            consumed += i
+            if (family != null) continue
+            val words = t.text.substring(0, m.range.first).split(Regex("\\s+"))
+                .map { w -> w.filter { it.isLetter() || it in "'.-♀♂" || it.isDigit() } }
+                .filter { w -> w.any { it.isLetter() } && !w.equals("xl", true) }
+            var found: List<Species> = emptyList()
+            for (k in minOf(3, words.size) downTo 1) {
+                found = lookup(Rules.norm(words.takeLast(k).joinToString("")), d)
+                if (found.isNotEmpty()) break
+            }
+            if (found.isEmpty() && words.isEmpty()) {
+                // a lone "CANDY": the species name is the nearest line to its left or just above it
+                val h = t.box.height().coerceAtLeast(1)
+                val neighbours = tokens.withIndex().filter { (j, o) ->
+                    if (j == i || candyRx.containsMatchIn(o.text)) return@filter false
+                    val dy = o.box.centerY() - t.box.centerY(); val gap = t.box.left - o.box.right
+                    val sameRow = abs(dy) <= h && gap >= -h && gap <= h * 8
+                    val above = dy < 0 && -dy <= h * 3 && abs(o.box.centerX() - t.box.centerX()) <= h * 6
+                    sameRow || above
+                }.sortedBy { (_, o) -> dist(o.box, t.box) }
+                for ((j, o) in neighbours) {
+                    val n = Rules.norm(o.text.filter { !it.isDigit() })
+                    lookup(n, d).takeIf { it.isNotEmpty() }?.let { found = it; consumed += j }
+                    if (found.isNotEmpty()) break
+                }
+            }
+            if (found.isNotEmpty()) family = found.map { it.dex }.distinct().flatMap { d.family[it].orEmpty() }.distinct()
         }
-        // Several Pokémon can share a normalised name (Nidoran♀ / Nidoran♂), so merge all their families.
-        val family = norms.firstNotNullOfOrNull { n ->
-            candyRx.matchEntire(n)?.groupValues?.get(1)?.let { d.byName[it] }
-                ?.map { it.dex }?.distinct()?.flatMap { d.family[it].orEmpty() }?.distinct()?.takeIf { it.isNotEmpty() }
-        }
-        val seenTypes = typesOnScreen(tokens, screenH)
+        return family to consumed
+    }
 
-        var nickname = false
-        var cands: List<Species> = when {
-            family == null -> named.toList()
-            named.any { it in family } -> named.filter { it in family } + family.filter { it !in named }
-            else -> { nickname = true; family }
+    /** Exact name, or – for names of 5+ letters – every name that is one letter off (OCR slips). */
+    private fun lookup(n: String, d: Data): List<Species> {
+        if (n.isEmpty()) return emptyList()
+        d.byName[n]?.let { return it }
+        if (n.length < 5) return emptyList()
+        val out = ArrayList<Species>()
+        for ((k, v) in d.byName) if (abs(k.length - n.length) <= 1 && lev(k, n) == 1) out += v
+        return out
+    }
+
+    private fun lev(a: String, b: String): Int {
+        var prev = IntArray(b.length + 1) { it }
+        for (i in 1..a.length) {
+            val cur = IntArray(b.length + 1); cur[0] = i
+            for (j in 1..b.length) cur[j] = minOf(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + if (a[i - 1] == b[j - 1]) 0 else 1)
+            prev = cur
         }
-        if (cands.isEmpty()) return null
-        if (seenTypes.isNotEmpty()) {
-            val exact = cands.filter { it.types == seenTypes }
-            val partial = cands.filter { it.types.containsAll(seenTypes) }
-            cands = exact.ifEmpty { partial }.ifEmpty { cands }
-        }
-        return SpeciesGuess(cands, nickname)
+        return prev[b.length]
     }
 
     /**
@@ -186,7 +293,7 @@ object SpeciesDb {
      * and only above the POWER UP button – the move list further down can contain a move called "Psychic".
      */
     fun typesOnScreen(tokens: List<Token>, screenH: Int): Set<String> {
-        val powerUp = tokens.firstOrNull { Regex("power[\\s-]*up", RegexOption.IGNORE_CASE).containsMatchIn(it.text) }
+        val powerUp = tokens.firstOrNull { powerUpRx.containsMatchIn(it.text) }
         val limit = powerUp?.box?.top ?: (screenH * 0.62).toInt()
         val out = HashSet<String>()
         for (t in tokens) {
@@ -196,4 +303,55 @@ object SpeciesDb {
         }
         return if (out.size <= 2) out else emptySet()
     }
+
+    // ---------------------------------------------------------------------------------------------------------
+    // Turning clues into candidates
+    // ---------------------------------------------------------------------------------------------------------
+
+    /** Soft evidence that [sp] is the Pokémon on screen: evolve cost and size. Higher = more likely. */
+    fun score(sp: Species, c: Clues, d: Data): Double {
+        var s = 0.0
+        c.evolveCost?.let { s += if (d.evolveCosts[sp.dex]?.contains(it) == true) 10.0 else -10.0 }
+        val sz = d.size[sp.dex to sp.form.lowercase()] ?: d.size[sp.dex to "normal"]
+        if (sz != null) {
+            c.heightM?.let { if (it > 0 && sz.first > 0) s -= abs(ln(it / sz.first)) }
+            c.weightKg?.let { if (it > 0 && sz.second > 0) s -= abs(ln(it / sz.second)) / 3 }
+        }
+        return s
+    }
+
+    /** The likely species, most likely first, from name / candy family / types, ordered by size and evolve cost. */
+    fun candidates(c: Clues, d: Data? = data): SpeciesGuess? {
+        d ?: return null
+        val fam = c.family
+        var nickname = false
+        var cands: List<Species> = when {
+            fam == null -> c.names
+            c.names.any { it in fam } -> c.names.filter { it in fam } + fam.filter { it !in c.names }
+            else -> { nickname = true; fam }
+        }
+        if (cands.isEmpty()) return null
+        if (c.types.isNotEmpty()) {
+            val exact = cands.filter { it.types == c.types }
+            val partial = cands.filter { it.types.containsAll(c.types) }
+            cands = exact.ifEmpty { partial }.ifEmpty { cands }
+        }
+        val named = c.names.toSet()
+        cands = cands.sortedWith(compareByDescending<Species> { it in named }.thenByDescending { score(it, c, d) })
+        return SpeciesGuess(cands, nickname)
+    }
+
+    /**
+     * Last resort when the name and candy gave nothing that fits: every Pokémon with the types on screen (or all of
+     * them), best size / evolve-cost evidence first. Needs at least one real clue, or the answer would be a coin flip.
+     */
+    fun widened(c: Clues, d: Data? = data): List<Species>? {
+        d ?: return null
+        if (c.types.isEmpty() && c.heightM == null && c.weightKg == null && c.evolveCost == null) return null
+        val pool = if (c.types.isEmpty()) d.all else d.all.filter { it.types == c.types }.ifEmpty { d.all.filter { it.types.containsAll(c.types) } }
+        return pool.sortedByDescending { score(it, c, d) }
+    }
+
+    /** One call for tests and simple uses: read the clues from [tokens] and rank the candidates. */
+    fun guess(tokens: List<Token>, screenH: Int, d: Data? = data): SpeciesGuess? = candidates(readClues(tokens, screenH, d), d)
 }

@@ -2,7 +2,7 @@ package dev.trainerlens
 
 import kotlin.math.hypot
 
-data class SummaryRead(val cp: Int, val hp: Int, val dust: Int?, val lines: List<String>)
+data class SummaryRead(val cp: Int, val hp: Int, val dust: Int?)
 
 /** Reads CP, max HP and power-up stardust from the Pokémon summary screen (English or German labels). */
 object SummaryParser {
@@ -38,6 +38,6 @@ object SummaryParser {
             hypot((t.box.centerX() - button.box.centerX()).toDouble(), (t.box.centerY() - button.box.centerY()).toDouble())
         }?.second
         else dustTokens.maxOfOrNull { it.second }
-        return SummaryRead(cp, hp, dust, tokens.map { it.text })
+        return SummaryRead(cp, hp, dust)
     }
 }

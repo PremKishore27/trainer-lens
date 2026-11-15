@@ -1,93 +1,107 @@
 package dev.trainerlens
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.os.Handler
+import android.os.Looper
 import android.view.View
+import android.widget.Button
+import android.widget.LinearLayout
 import android.widget.TextView
+import java.util.concurrent.Executor
 
 /**
  * Feature 2: IV checker (the overlay's "IV" tab).
  *
- * Like Poké Genie it combines two sources:
- *  1. Pokémon page: species + CP + HP + power-up stardust → every IV spread / level that fits (a range).
- *  2. In-game appraisal: the three bars are measured from the screenshot → exact IVs, then cross-checked with CP/HP.
- * Readings only count when they are the same on two frames in a row, so animations overlapping the CP don't cause errors.
+ * All heavy work (pixel scans, the IV solver, rank tables) runs on [worker]; the UI is only touched through [main].
+ *  1. Pokémon page: CP + HP + stardust + the clues that identify the species → every IV spread / level that fits.
+ *  2. In-game appraisal: the three bars are measured from the screenshot → exact IVs.
+ * A page is shown from its first frame (marked ⏳) and confirmed on the second, so swiping between Pokémon is fast.
  */
-class IvFeature(private val ctx: Context) {
+class IvFeature(private val ctx: Context, private val worker: Executor) {
+    private val main = Handler(Looper.getMainLooper())
     private val idleText = "Open a Pokémon's page.\nFor exact IVs, tap ☰ → Appraise in the game."
     private val card = TextView(ctx).apply {
         setTextColor(Color.WHITE); textSize = 15f; setPadding(24, 16, 24, 16)
         text = idleText; setBackgroundColor(GREY)
     }
-    val panel: View get() = card
+    private val chips = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; visibility = View.GONE }
+    val panel: View = LinearLayout(ctx).apply {
+        orientation = LinearLayout.VERTICAL
+        addView(card)
+        addView(chips)
+        addView(Button(ctx).apply { text = "📋 Copy screen text (for bug reports)"; textSize = 11f; setOnClickListener { copyDebug() } })
+    }
 
-    /** The Pokémon currently on screen (kept while the appraisal covers part of the page). */
-    private data class Mon(val forms: List<Species>, val cp: Int, val hp: Int, val dust: Int?, val nickname: Boolean)
-    private var mon: Mon? = null
-    private var monSeen = 0L
-    private var pendingMon: Mon? = null
-    private var pendingIv: Iv? = null
-    private var appraised: Iv? = null
-    private var shownKey = ""
+    // worker-thread state
+    private val tracker = MonTracker { m -> SpeciesDb.get()?.let { Identify.analyze(m, it) } }
     private var arc: ArcReader? = null
-    /** Level-arc dot of the current Pokémon (screen position), if found. */
-    private var dot: Pair<Float, Float>? = null
+    private var lastSeen = 0L
+    private var shown = ""
+    private var lastTokens: List<Token> = emptyList()
+    private var lastScreenH = 0
+    private var ocrMs = 0L
+    private var analysisMs = 0L
 
-    fun onFrame(tokens: List<Token>, bmp: Bitmap, screenH: Int, now: Long) {
+    /** True while a Pokémon is shown and nothing is changing – the scan loop can then slow down to save battery. */
+    @Volatile var settled = false; private set
+
+    fun onFrame(tokens: List<Token>, bmp: Bitmap, screenH: Int, now: Long, ocrTimeMs: Long) {
+        val t0 = System.nanoTime()
+        lastTokens = tokens; lastScreenH = screenH; ocrMs = ocrTimeMs
         val read = SummaryParser.parse(tokens, screenH)
         if (read != null && !SpeciesDb.ready) {
             SpeciesDb.ensureLoaded(now)
-            show("Loading Pokémon data… (internet needed)" + (SpeciesDb.lastError?.let { "\nLast error: $it" } ?: ""), GREY, "loading")
+            show("Loading Pokémon data… (internet needed)" + (SpeciesDb.lastError?.let { "\nLast error: $it" } ?: ""), GREY, "loading", emptyList())
             return
         }
-        val guess = read?.let { SpeciesDb.guess(tokens, screenH) }
-        if (read != null && guess != null) {
-            val m = Mon(guess.candidates, read.cp, read.hp, read.dust, guess.nickname)
-            if (m == pendingMon) { // stable on two frames
-                if (mon?.let { it.forms[0].dex != m.forms[0].dex || it.cp != m.cp } != false) { appraised = null; dot = null } // new Pokémon
-                mon = m; monSeen = now
+        var changed = false
+        if (read != null) {
+            lastSeen = now
+            val clues = SpeciesDb.readClues(tokens, screenH)
+            changed = tracker.observe(read.cp, read.hp, read.dust, clues)
+            val m = tracker.current
+            // level arc: look for the white dot once per Pokémon, on its second frame
+            if (m != null && m.frames >= 2 && !m.dotTried) {
+                m.dotTried = true
                 val a = arc ?: ArcReader(ctx, bmp.width, bmp.height).also { arc = it }
-                a.pick(a.findDots(bmp))?.let { d -> dot = d; a.learn(d) }
+                a.pick(a.findDots(bmp))?.let { d ->
+                    m.dot = d; a.learn(d); m.arcLevel = a.level(d)
+                    changed = tracker.refresh(m) || changed
+                }
             }
-            pendingMon = m
         }
+        AppraisalReader.read(tokens, bmp)?.let { if (tracker.observeBars(it)) { lastSeen = now; changed = true } }
 
-        val bars = AppraisalReader.read(tokens, bmp)
-        if (bars != null) {
-            if (bars == pendingIv) { appraised = bars; monSeen = now }
-            pendingIv = bars
-        }
-
-        val m = mon
-        val ap = appraised
-        if (m == null && ap != null) { // appraisal seen but the Pokémon page wasn't read: IVs only
-            show("${"%.0f".format(ap.pct)}%  ${ap.a}/${ap.d}/${ap.s}  ${rating(ap.total)}\n✔ from appraisal (open the Pokémon page for level & PvP)", GREY, "ap-$ap")
+        if (now - lastSeen > 5_000) { // no Pokémon page for a while
+            tracker.reset(); settled = false
+            show(idleText, GREY, "idle", emptyList())
             return
         }
-        if (m == null || now - monSeen > 15_000) { // nothing (recent) on screen
-            if (now - monSeen > 15_000) { mon = null; appraised = null }
-            show(idleText, GREY, "idle")
-            return
-        }
-        render(m)
+        val m = tracker.current
+        settled = m != null && m.frames >= 3 && !changed
+        if (changed || shown.isEmpty()) render()
+        analysisMs = (System.nanoTime() - t0) / 1_000_000
     }
 
-    private fun render(m: Mon) {
-        val d = dot
-        val arcLevel = d?.let { arc?.level(it) }
-        val key = "${m.forms.map { it.id + it.form }}-${m.cp}-${m.hp}-${m.dust}-$appraised-$arcLevel-${arc?.status()}"
-        if (key == shownKey) return
-        val ap = appraised
-        val r = IvAnalyzer.analyze(m.forms, m.cp, m.hp, m.dust, ap, arcLevel)
+    private fun render() {
+        val m = tracker.current ?: return
+        val r = tracker.result
         if (r == null) {
-            show("${m.forms[0].name} · CP ${m.cp} · HP ${m.hp}\nNo IV spread fits these numbers.\n" +
-                "Mega / buddy-boosted, or a misread – hold still for a second.", GREY, key)
+            val c = m.clues()
+            val why = if (SpeciesDb.candidates(c) == null && SpeciesDb.widened(c) == null)
+                "Can't tell which Pokémon this is (renamed, and no candy / type line read).\nTap 📋 below and send me the text."
+            else "No IV spread fits these numbers.\nMega / buddy-boosted, or a misread – hold still for a second."
+            show("CP ${m.cp} · HP ${m.hp}\n$why", GREY, m.signature(), emptyList())
             return
         }
         // An appraisal fixed the exact level: use it to calibrate the level arc's end point
-        if (ap != null && r.exact != null && r.levelMin == r.levelMax && d != null) arc?.calibrateMax(d, r.levelMin)
-        show(format(r, m, ap), color(r), key)
+        val d = m.dot
+        if (m.appraised != null && r.exact != null && r.levelMin == r.levelMax && d != null) arc?.calibrateMax(d, r.levelMin)
+        show(format(r, m), color(r), m.signature(), r.others.distinctBy { it.label }.take(3))
     }
 
     private fun rating(total: Int) = when {
@@ -100,9 +114,11 @@ class IvFeature(private val ctx: Context) {
 
     private fun lv(x: Double) = if (x % 1.0 == 0.0) "%.0f".format(x) else "%.1f".format(x)
 
-    private fun format(r: IvResult, m: Mon, ap: Iv?): String {
+    private fun format(r: IvResult, m: Mon): String {
+        val ap = m.appraised
         val sb = StringBuilder(r.species.label)
-        if (m.nickname) sb.append("  (nickname – found via candy)")
+        if (r.guessed) sb.append("  (best guess)") else if (r.nickname) sb.append("  (nickname)")
+        if (m.provisional) sb.append("  ⏳")
         sb.append('\n')
         val e = r.exact
         val level = if (r.levelMin == r.levelMax) "Lv ${lv(r.levelMin)}" else "Lv ${lv(r.levelMin)}–${lv(r.levelMax)}"
@@ -118,7 +134,6 @@ class IvFeature(private val ctx: Context) {
             ap != null -> sb.append("\nAppraisal ${ap.a}/${ap.d}/${ap.s} didn't match CP – re-open the Pokémon")
             else -> sb.append("\nAppraise in-game for the exact value")
         }
-        if (r.otherForms.isNotEmpty()) sb.append("\nAlso fits: ${r.otherForms.joinToString { it.label }}")
         arc?.let { sb.append("\n").append(if (r.arcUsed) "arc ✓ used" else it.status()) }
         return sb.toString()
     }
@@ -149,9 +164,45 @@ class IvFeature(private val ctx: Context) {
         }
     }
 
-    private fun show(text: String, bg: Int, key: String) {
-        if (key == shownKey) return
-        shownKey = key; card.text = text; card.setBackgroundColor(bg)
+    /** Updates the card (and the "not it?" buttons) on the main thread; skips work if nothing changed. */
+    private fun show(text: String, bg: Int, key: String, others: List<Species>) {
+        val k = "$key|$text"
+        if (k == shown) return
+        shown = k
+        main.post {
+            card.text = text; card.setBackgroundColor(bg)
+            chips.removeAllViews()
+            if (others.isEmpty()) { chips.visibility = View.GONE; return@post }
+            chips.addView(TextView(ctx).apply { this.text = "Not it? "; setTextColor(Color.LTGRAY); textSize = 12f; setPadding(8, 16, 8, 0) })
+            others.forEach { sp ->
+                chips.addView(Button(ctx).apply {
+                    this.text = sp.label; textSize = 11f; isAllCaps = false
+                    setOnClickListener { worker.execute { if (tracker.choose(sp)) render() } }
+                })
+            }
+            chips.visibility = View.VISIBLE
+        }
+    }
+
+    /** Copies what the OCR read on the last frame (text + position) and what the app made of it. */
+    private fun copyDebug() {
+        worker.execute {
+            val d = SpeciesDb.get()
+            val clues = d?.let { SpeciesDb.readClues(lastTokens, lastScreenH, it) }
+            val txt = buildString {
+                append("Trainer Lens ${BuildConfig.VERSION_NAME} · IV · screen height $lastScreenH · OCR ${ocrMs} ms · analysis ${analysisMs} ms\n")
+                append("Clues: names=${clues?.names?.map { it.label }} family=${clues?.family?.map { it.name }?.distinct()} types=${clues?.types} " +
+                    "size=${clues?.heightM}m/${clues?.weightKg}kg evolve=${clues?.evolveCost}\n")
+                tracker.current?.let { append("Pokémon: CP ${it.cp} HP ${it.hp} dust ${it.dust} frames ${it.frames} appraised ${it.appraised}\n") }
+                tracker.result?.let { append("Result: ${it.species.label} others=${it.others.map { o -> o.label }} guessed=${it.guessed} ${it.pctMin}-${it.pctMax}%\n") }
+                append("---\n")
+                lastTokens.sortedBy { it.box.top }.forEach { append("${it.text}  @${it.box.left},${it.box.top},${it.box.right},${it.box.bottom}\n") }
+            }
+            main.post {
+                (ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Trainer Lens IV", txt))
+                card.text = "Copied ${lastTokens.size} text lines – paste them in your message.\n\n" + card.text
+            }
+        }
     }
 
     private companion object { val GREY = 0xCC555555.toInt() }
