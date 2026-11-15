@@ -1,5 +1,7 @@
 package dev.trainerlens
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.graphics.Color
 import android.view.View
@@ -13,7 +15,7 @@ import android.widget.TextView
  * A reading only counts when the same item + count is seen on two frames in a row (the list isn't moving), and the
  * count shown is the one read most often – this filters out misreads while scrolling.
  */
-class BagFeature(ctx: Context) {
+class BagFeature(private val ctx: Context) {
     /** item -> (count -> how many stable frames showed it) */
     private val votes = mutableMapOf<String, MutableMap<Int, Int>>()
     private var lastFrame: Map<String, Int> = emptyMap()
@@ -31,6 +33,7 @@ class BagFeature(ctx: Context) {
             addView(Button(ctx).apply { text = "Free more +10"; setOnClickListener { targetFree += 10; refresh() } })
             addView(Button(ctx).apply { text = "Reset"; setOnClickListener { reset() } })
         })
+        addView(Button(ctx).apply { text = "📋 Copy screen text (for bug reports)"; textSize = 11f; setOnClickListener { copyDebug() } })
     }
 
     private fun reset() { votes.clear(); lastFrame = emptyMap(); used = null; capacity = null; targetFree = 30; refresh() }
@@ -38,7 +41,23 @@ class BagFeature(ctx: Context) {
     /** Best reading per item so far. */
     private fun counts(): Map<String, Int> = votes.mapValues { (_, v) -> v.maxBy { it.value }.key }
 
+    private var lastTokens: List<Token> = emptyList()
+    private var lastScreenH = 0
+
+    /** Copies what the OCR read on the last frame (text + position) so it can be pasted into a bug report. */
+    private fun copyDebug() {
+        val p = ItemParser.parse(lastTokens, lastScreenH)
+        val txt = buildString {
+            append("Trainer Lens ${BuildConfig.VERSION_NAME} · screen height $lastScreenH\n")
+            append("Parsed: ${p.counts} · bag ${p.used}/${p.capacity}\n---\n")
+            lastTokens.sortedBy { it.box.top }.forEach { append("${it.text}  @${it.box.left},${it.box.top},${it.box.right},${it.box.bottom}\n") }
+        }
+        (ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Trainer Lens OCR", txt))
+        output.text = "Copied ${lastTokens.size} text lines – paste them in your message.\n\n" + output.text
+    }
+
     fun onTokens(tokens: List<Token>, screenH: Int) {
+        lastTokens = tokens; lastScreenH = screenH
         val p = ItemParser.parse(tokens, screenH)
         if (p.counts.isEmpty() && p.capacity == null) { lastFrame = emptyMap(); return }
         if (p.used != null) { used = p.used; capacity = p.capacity }
@@ -62,7 +81,7 @@ class BagFeature(ctx: Context) {
         val sb = StringBuilder("Bag $u/$c  •  remembered: ${seen.size} item types\n")
         if (plan.needed > 0) {
             sb.append("To get $targetFree free slots, free ${plan.needed}:\n")
-            plan.discards.forEach { sb.append("• Discard ${it.amount} × ${it.item}\n") }
+            plan.discards.forEach { sb.append("• Discard ${it.amount} × ${it.item}  [${it.rarity.label}]" + (if (it.belowKeep) " (below keep limit)" else "") + "\n") }
             if (plan.freed < plan.needed) sb.append("Scroll the whole list for a better plan (short by ${plan.needed - plan.freed}).\n")
             sb.append("\n")
         } else {
@@ -72,9 +91,10 @@ class BagFeature(ctx: Context) {
         if (review.remove.isEmpty()) sb.append("Can remove: nothing above its keep limit.\n")
         else {
             sb.append("Can remove (over keep limit):\n")
-            review.remove.forEach { sb.append("• ${it.amount} × ${it.item}\n") }
+            review.remove.forEach { sb.append("• ${it.amount} × ${it.item}  [${it.rarity.label}]\n") }
         }
         if (review.keep.isNotEmpty()) sb.append("Keep: ${review.keep.joinToString(", ")}")
+        if (seen.isEmpty()) sb.append("\nNo items recognised yet – scroll slowly, or tap 📋 and send the text to the developer.")
         output.text = sb.toString().trimEnd()
     }
 }

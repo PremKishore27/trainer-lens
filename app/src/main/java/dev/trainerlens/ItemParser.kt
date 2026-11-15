@@ -11,7 +11,8 @@ data class ParsedScreen(val counts: Map<String, Int>, val used: Int?, val capaci
 object ItemParser {
     private val capacityRx = Regex("(\\d{1,4})\\s*/\\s*(\\d{1,4})")
     private val countRx = Regex("^[xX×]?\\s*(\\d{1,4})$")
-    private val inlineCountRx = Regex("[xX×]\\s*(\\d{1,4})\\s*$")
+    // Count printed in the same OCR line as the name, before or after it: "Poke Ball x20", "x20 Poke Ball", "×20"
+    private val inlineCountRx = Regex("(?:^|\\s)[xX×]\\s?(\\d{1,4})(?=\\s|$)")
 
     // Longest names first so "Max Potion" wins over "Potion", "Silver Pinap Berry" over "Pinap Berry".
     private val known = Rules.DEFAULT_RULES.map { Rules.norm(it.name) to it.name }.sortedByDescending { it.first.length }
@@ -45,22 +46,26 @@ object ItemParser {
             val name = matchName(t.text) ?: continue
             // Count printed on the same line ("Poke Ball x20")
             val inline = inlineCountRx.find(t.text.trim())?.groupValues?.get(1)?.toIntOrNull()
+                ?: Regex("(\\d{1,4})\\s*$").find(t.text.trim())?.takeIf { Rules.norm(t.text).length > 4 }?.groupValues?.get(1)?.toIntOrNull()
             if (inline != null) counts[name] = inline else names += t to name
         }
 
         val numbers = tokens.filter { countRx.matches(it.text.trim()) && inSafeArea(it.box) }
-        val xNumbers = numbers.filter { it.text.trim().firstOrNull()?.let { c -> c == 'x' || c == 'X' || c == '×' } == true }
-        val pool = xNumbers.ifEmpty { numbers }
+        val pool = numbers
 
-        // Pair names and numbers globally, closest pairs first, each number used at most once. A count must sit
-        // in the same row as its label: vertically within ~2.5 label heights.
+        // Pair names and numbers globally, closest pairs first, each number used at most once.
+        // The list's row height ("pitch") is estimated from the gap between item labels; a count must be within
+        // half a row of its label vertically (it may sit left, right, above or below the name inside that row).
+        val ys = names.map { it.first.box.centerY() }.sorted()
+        val minGap = names.maxOfOrNull { it.first.box.height() } ?: 20
+        val gaps = ys.zipWithNext { a, b -> b - a }.filter { it > minGap }.sorted()
+        val pitch = if (gaps.isNotEmpty()) gaps[gaps.size / 2] else (screenH / 6).coerceAtLeast(200)
         data class Pair3(val name: String, val label: Token, val num: Token, val d: Double)
         val pairs = ArrayList<Pair3>()
         for ((label, name) in names) {
-            val h = label.box.height().coerceAtLeast(20)
             for (n in pool) {
                 val dy = abs(n.box.centerY() - label.box.centerY())
-                if (dy > h * 2.5) continue
+                if (dy > pitch * 0.55) continue
                 val dx = abs(n.box.centerX() - label.box.centerX())
                 pairs += Pair3(name, label, n, Math.hypot(dx.toDouble(), dy * 2.0))
             }

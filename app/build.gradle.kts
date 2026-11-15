@@ -37,6 +37,7 @@ android {
             signingConfig = if (ksPath != null) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
         }
     }
+    buildFeatures { buildConfig = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
 }

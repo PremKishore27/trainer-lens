@@ -83,11 +83,18 @@ Tested on: Motorola Signature (Android 17). Requires Android 8.0 or newer.
 2. Scroll **slowly** through the whole list. The session **remembers** every item it reads (*remembered: N item types*) until you tap **Reset** or **Stop** – even with the panel closed.
    A count is only accepted when it's read the same on two frames in a row (the list isn't moving), and rows cut off at the screen edge are ignored, so scrolling doesn't create wrong numbers.
 3. Read the panel:
+   - Items are sorted by **rarity**: **Common** (Potion, Super Potion, Nanab, Revive, Poké Ball, Hyper Potion, Razz, Great Ball, Pinap) are suggested first,
+     then **Uncommon** (Max Potion, Max Revive, Ultra Ball, Silver Pinap) – only their surplus. **Rare** items are never suggested.
+   - **Bag full?** It lists exactly what to discard to get 30 free slots, common items first. If the surplus isn't enough, it goes
+     down to half the keep limit of *common* items and marks those *(below keep limit)*.
    - **Can remove** – items above their keep limit (e.g. 84 Poké Balls with a limit of 50 → remove 34).
    - **Keep** – everything else, plus protected items (incense, lures, passes, incubators, camera, gifts, evolution items, Star Piece, Lucky Egg, Golden Razz, Rare Candy, TMs) that are never suggested.
    - **Free more (+10)** – the app aims to keep 30 slots empty; each tap raises the target by 10. It only matters when the bag is nearly full.
 
-Keep limits are in [`Rules.kt`](app/src/main/java/dev/trainerlens/Rules.kt) – earlier items in the list are suggested first.
+**"remembered: 0 item types"?** Stop on a part of the list, tap **📋 Copy screen text** in the Bag tab and paste it into a
+[GitHub issue](https://github.com/PremKishore27/trainer-lens/issues) – it shows exactly what the app read.
+
+Keep limits and rarity are in [`Rules.kt`](app/src/main/java/dev/trainerlens/Rules.kt) – earlier items in the list are suggested first.
 
 ### 📊 IV checker
 Tap 🔍 → **📊 IV**, then open a Pokémon. For the **exact** result, appraise it in-game (☰ → Appraise) and keep the bars on screen for a second.
