@@ -158,15 +158,35 @@ The card's last line shows the arc's state: *learning (n dots)*, *appraise 1 Pok
 
 ## 5. Which Pokémon is it? (nicknames and regional forms)
 
-1. **Name** – the name line is matched against all Pokémon names.
-2. **Candy** – "DRATINI CANDY" means Dratini, Dragonair or Dragonite (the evolution family, built from
-   [`pokemon_evolutions.json`](https://pogoapi.net/api/v1/pokemon_evolutions.json)). If the name isn't a Pokémon – a
-   **nickname** – the family is used instead, and a nickname that happens to be another Pokémon's name is ignored.
-3. **Types** – "GRASS / DRAGON" (read above the POWER UP button, so a move called *Psychic* doesn't count) picks the
-   form: **Alolan Exeggutor** is Grass/Dragon, the normal one Grass/Psychic.
+The name line shows the **nickname**, so the app never relies on it alone. It collects *clues* from the page, over
+several frames, and combines them:
 
-The remaining candidates are all run through the solver; with an appraisal, the one matching the bars wins.
-If another form also fits, the card says **"Also fits: …"**.
+| Clue | How it's read | What it tells |
+|---|---|---|
+| **Name** | a line that is exactly a Pokémon name | the species (when not renamed) |
+| **Candy label** | "245 DRATINI CANDY", also "DRATINI" + "CANDY" on two lines, a wrong letter ("DRATIN1"), "CANDY XL" | the whole **evolution family** (built from [`pokemon_evolutions.json`](https://pogoapi.net/api/v1/pokemon_evolutions.json)) |
+| **Types** | "GRASS / DRAGON", read above the POWER UP button | the **form** – Alolan Exeggutor is Grass/Dragon, the normal one Grass/Psychic |
+| **Weight & height** | "210.00kg", "2.20m" compared with each species' average ([`pokemon_height_weight_scale.json`](https://pogoapi.net/api/v1/pokemon_height_weight_scale.json)) | the **stage** inside a family (Dratini 1.8 m, Dragonair 4.0 m, Dragonite 2.2 m / 210 kg). Soft score only – sizes vary, XXS to XXL |
+| **EVOLVE button** | the candy number next to it (25 = Dratini, 100 = Dragonair) and whether a button exists at all | the **stage**; final evolutions have no button |
+
+Then:
+
+1. Candidates = the family (if the name isn't a Pokémon, it's a nickname) filtered by the types, ordered by the size and EVOLVE evidence.
+2. Every candidate goes through the IV solver; the first that fits CP / HP / stardust wins. With an appraisal, the one matching the bars wins.
+3. **If nothing fits**, the search widens to every Pokémon with those types, best size/evolve evidence first, and the card says *(best guess)*.
+   This is only tried when at least one real clue (types, size, or EVOLVE) was read – otherwise the answer would be a coin flip, and the card says it can't tell.
+4. If other species also fit, the card shows **"Not it?"** buttons – tap one to switch.
+
+**Why not recognise the Pokémon from its picture?** There's no ready-made on-device model that tells Pokémon species apart, and the
+in-game 3D models (all forms, shinies, costumes, poses, lighting) differ from any artwork you could ship. Training one would mean
+a big dataset, 1,000+ classes and a larger app – and it would still be less reliable than the text on the page, which is exact.
+If the clues above ever fail on your phone, 📋 *Copy screen text* shows what was read, so the reading can be fixed.
+
+### Steady across frames (swiping)
+Identity is just **CP + HP**. Everything else is *collected* over frames of the same Pokémon (the most-seen candy family, types,
+stardust, the EVOLVE button on any frame), so a line missing or misread in one frame no longer changes the answer.
+- A page with new CP/HP is shown **from its first frame** (marked ⏳) if some species fits it; the second frame confirms it.
+- A reading that fits **no** IV spread (an animation over a digit) is ignored unless it's seen twice.
 
 ## 5b. Automated checks
 
@@ -174,7 +194,9 @@ Every build runs unit tests against snapshots of the game data:
 - CP multipliers and stardust costs equal the game master values for every level.
 - **Every Pokémon and form (1,168)** × 5 IV spreads × 13 levels × normal/shadow/purified/lucky stardust
   (≈ 76,000 cases): the true spread is always among the results, and with the appraisal it's exact, at the right level and form.
-- Nickname lookup via candy works for every Pokémon; Alolan Exeggutor is told apart by type; OCR look-alikes (`CP 2S78`) are fixed.
+- **Renamed Pokémon:** all 1,168 forms are found again from candy + types + size + EVOLVE button; a split candy label, a wrong letter, a count in front of the label.
+- **Frames:** flickering clues, swiping to the next Pokémon, a misread CP, and the "tap to switch" choice are simulated with real on-screen positions.
+- Alolan Exeggutor is told apart by type; OCR look-alikes (`CP 2S78`) are fixed.
 
 ## 6. PvP league ranks and the verdict line
 

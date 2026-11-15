@@ -24,7 +24,8 @@ how to clean up your **item bag**, and the **IVs and PvP rank** of any Pokémon 
 | 🖐️ | **Movable overlay** | One 🔍 bubble you can drag anywhere, with 🎒 Bag and 📊 IV tabs. |
 | 🎒 | **Bag advisor** | Remembers your items for the whole session while you scroll. Shows free slots, what you **can remove** (over your keep limit) and what to **keep** – even when the bag isn't full. When it is full, it tells you exactly what to discard to free the slots you want. |
 | 📊 | **IV checker** | Open any Pokémon with the IV tab selected. **Appraise it for exact IVs** – the app measures the appraisal bars like Poké Genie. The card shows **IV %**, appraisal **stars**, the **Attack / Defense / HP** spread, estimated **level**, and **Little / Great / Ultra League rank**. |
-| 🌍 | **Nicknames & regional forms** | Finds the species from its candy and types, so nicknamed Pokémon and Alolan / Galarian / Hisuian forms work. |
+| 🌍 | **Nicknames & regional forms** | Finds the species from its candy label, types, size and EVOLVE button – never from the name alone – so renamed Pokémon and Alolan / Galarian / Hisuian forms work. Shows **"Not it?"** buttons when two species fit. |
+| ⚡ | **Fast swiping** | A new Pokémon appears from the first frame (⏳), ~0.3–0.6 s after you swipe; heavy work runs in the background. |
 | 🎯 | **Level arc** | Reads the white dot on the level arc (like Poké Genie) and calibrates itself to your phone. |
 | ✅ | **Tested on every Pokémon** | Each build checks ~76,000 cases across all 1,168 forms against the game data. |
 | ✨ | **Shadow / purified / lucky** | Understands their different stardust costs. |
@@ -127,6 +128,8 @@ League ranks compare all 4,096 spreads of that species (#1 = best possible) – 
 ## FAQ
 
 **Is this allowed?** It's an unofficial tool. It doesn't modify, automate or connect to the game, but any third-party tool is used at your own risk.
+**Does it recognise the Pokémon from its picture?** No – the text on the page (candy, types, size, EVOLVE) is exact, while no on-device model separates 1,000+ Pokémon forms reliably. See [the calculations](docs/IV-CALCULATIONS.md#5-which-pokémon-is-it-nicknames-and-regional-forms).
+**It says "Can't tell which Pokémon this is".** Tap **📋 Copy screen text** in the IV tab and paste it into a [GitHub issue](https://github.com/PremKishore27/trainer-lens/issues) – it shows every line that was read and where.
 **Why does it need screen recording?** That's the only way an Android app can see what another app shows. The recording never leaves your phone.
 **The bubble disappeared.** Android may stop the screen capture after a while – open Trainer Lens and tap **▶ Start session** again. Step 4 (battery) helps.
 **"Display over other apps" is greyed out.** Do step 2: *App info → ⋮ → Allow restricted settings*.
