@@ -2,29 +2,19 @@ package dev.trainerlens
 
 import android.content.Context
 import android.graphics.Color
-import android.graphics.PixelFormat
-import android.view.Gravity
 import android.view.View
-import android.view.WindowManager
 import android.widget.TextView
 
-/** Feature 2: IV checker. Shows a small, non-touchable card whenever a Pokémon summary screen is visible. */
-class IvFeature(private val ctx: Context, private val wm: WindowManager) {
+/** Feature 2: IV checker. Its card lives in the overlay's "IV" tab and updates while a Pokémon page is open. */
+class IvFeature(ctx: Context) {
+    private val idleText = "Open a Pokémon's page in the game.\nThe IV card appears here."
     private val card = TextView(ctx).apply {
-        setTextColor(Color.WHITE); textSize = 14f; setPadding(24, 16, 24, 16); visibility = View.GONE
+        setTextColor(Color.WHITE); textSize = 14f; setPadding(24, 16, 24, 16)
+        text = idleText; setBackgroundColor(0xCC555555.toInt())
     }
+    val panel: View get() = card
     private var lastKey = ""
     private var lastSeen = 0L
-
-    init {
-        val lp = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
-            PixelFormat.TRANSLUCENT
-        ).apply { gravity = Gravity.TOP or Gravity.START; x = 16; y = 180 }
-        wm.addView(card, lp)
-    }
 
     fun onTokens(tokens: List<Token>, screenH: Int, now: Long) {
         val read = SummaryParser.parse(tokens, screenH)
@@ -36,7 +26,7 @@ class IvFeature(private val ctx: Context, private val wm: WindowManager) {
         }
         val forms = read?.let { SpeciesDb.find(it.lines) }
         if (read == null || forms.isNullOrEmpty()) {
-            if (now - lastSeen > 3000) card.visibility = View.GONE
+            if (now - lastSeen > 3000 && lastKey != "idle") { lastKey = "idle"; show(idleText, 0xCC555555.toInt()) }
             return
         }
         lastSeen = now
@@ -91,7 +81,5 @@ class IvFeature(private val ctx: Context, private val wm: WindowManager) {
         }
     }
 
-    private fun show(text: String, bg: Int) { card.text = text; card.setBackgroundColor(bg); card.visibility = View.VISIBLE }
-
-    fun detach() { runCatching { wm.removeView(card) } }
+    private fun show(text: String, bg: Int) { card.text = text; card.setBackgroundColor(bg) }
 }

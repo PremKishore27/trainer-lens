@@ -19,18 +19,23 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.SystemClock
 import android.view.Gravity
+import android.view.MotionEvent
+import android.view.ViewConfiguration
 import android.view.View
 import android.view.WindowManager
 import android.widget.Button
+import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import kotlin.math.abs
 
 /**
  * Shared screen-reading engine. Each frame is OCR'd once and the tokens are handed to every feature:
- *  1. BagFeature  - item storage advisor (panel behind the bubble)
- *  2. IvFeature   - IV / PvP card shown automatically on Pokémon summary screens
+ *  1. BagFeature  - item storage advisor ("Bag" tab; reads all the time so the session remembers items)
+ *  2. IvFeature   - IV / PvP card ("IV" tab; only computed while that tab is open)
  * Add future features by creating a class with onTokens(...) and calling it from scanOnce().
  */
 class CaptureService : Service() {
@@ -60,7 +65,7 @@ class CaptureService : Service() {
         }, main)
         wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         bag = BagFeature(this)
-        iv = IvFeature(this, wm)
+        iv = IvFeature(this)
         SpeciesDb.ensureLoaded(SystemClock.elapsedRealtime())
         setupMenu()
         setupCapture()
@@ -106,39 +111,102 @@ class CaptureService : Service() {
                 val tokens = text.textBlocks.flatMap { it.lines }.mapNotNull { l ->
                     l.boundingBox?.let { Token(l.text, it) }
                 }
-                bag.onTokens(tokens)
-                iv.onTokens(tokens, screenH, SystemClock.elapsedRealtime())
+                bag.onTokens(tokens, screenH) // always runs, so the session remembers items even with the panel closed
+                if (tab == Tab.IV) iv.onTokens(tokens, screenH, SystemClock.elapsedRealtime())
             }
             .addOnCompleteListener { busy = false; bmp.recycle() }
     }
 
-    /** Floating bubble; tapping it opens the panel (currently: Bag) with a Stop button. */
+    private enum class Tab { BAG, IV }
+    private var tab: Tab? = null
+
+    /**
+     * One floating window: a draggable 🔍 bubble plus a panel with two tabs (🎒 Bag, 📊 IV).
+     * Drag the bubble anywhere; tap it to open or close the panel. A feature's info shows only when its tab is open.
+     */
     private fun setupMenu() {
+        val m = resources.displayMetrics
+        val dp = m.density
         val lp = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE, PixelFormat.TRANSLUCENT
-        ).apply { gravity = Gravity.TOP or Gravity.END; y = 300 }
+        ).apply { gravity = Gravity.TOP or Gravity.START; x = m.widthPixels - (72 * dp).toInt(); y = (160 * dp).toInt() }
 
+        val content = FrameLayout(this)
+        val scroll = MaxHeightScrollView(this, (m.heightPixels * 0.55).toInt()).apply { addView(content) }
+        lateinit var bagBtn: Button
+        lateinit var ivBtn: Button
         val panel = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL; setPadding(24, 24, 24, 24)
+            orientation = LinearLayout.VERTICAL; setPadding(16, 16, 16, 16)
             setBackgroundColor(0xEE202020.toInt()); visibility = View.GONE
-            addView(bag.panel)
-            addView(Button(context).apply { text = "Stop"; setOnClickListener { stopSelf() } })
+            minimumWidth = (260 * dp).toInt()
         }
-        val bubble = Button(this).apply {
-            text = "🔍"
-            setOnClickListener { panel.visibility = if (panel.visibility == View.VISIBLE) View.GONE else View.VISIBLE }
+        fun select(t: Tab) {
+            tab = t
+            content.removeAllViews()
+            content.addView(if (t == Tab.BAG) bag.panel else iv.panel)
+            bagBtn.alpha = if (t == Tab.BAG) 1f else 0.5f
+            ivBtn.alpha = if (t == Tab.IV) 1f else 0.5f
         }
+        bagBtn = Button(this).apply { text = "🎒 Bag"; setOnClickListener { select(Tab.BAG) } }
+        ivBtn = Button(this).apply { text = "📊 IV"; setOnClickListener { select(Tab.IV) } }
+        val stopBtn = Button(this).apply { text = "■ Stop"; setOnClickListener { stopSelf() } }
+        panel.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            addView(bagBtn); addView(ivBtn); addView(stopBtn)
+        })
+        panel.addView(scroll)
+
+        val bubble = Button(this).apply { text = "🔍" }
         val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; addView(bubble); addView(panel) }
+
+        val slop = ViewConfiguration.get(this).scaledTouchSlop
+        var downX = 0f; var downY = 0f; var startX = 0; var startY = 0; var dragging = false
+        bubble.setOnTouchListener { _, e ->
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN -> { downX = e.rawX; downY = e.rawY; startX = lp.x; startY = lp.y; dragging = false; true }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = e.rawX - downX; val dy = e.rawY - downY
+                    if (!dragging && (abs(dx) > slop || abs(dy) > slop)) dragging = true
+                    if (dragging) {
+                        lp.x = (startX + dx).toInt().coerceIn(0, (m.widthPixels - box.width).coerceAtLeast(0))
+                        lp.y = (startY + dy).toInt().coerceIn(0, (m.heightPixels - bubble.height).coerceAtLeast(0))
+                        wm.updateViewLayout(box, lp)
+                    }
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    if (!dragging) {
+                        val open = panel.visibility != View.VISIBLE
+                        panel.visibility = if (open) View.VISIBLE else View.GONE
+                        if (open && tab == null) select(Tab.BAG)
+                        // keep the opened panel on screen
+                        box.post {
+                            lp.x = lp.x.coerceIn(0, (m.widthPixels - box.width).coerceAtLeast(0))
+                            lp.y = lp.y.coerceIn(0, (m.heightPixels - box.height).coerceAtLeast(0))
+                            runCatching { wm.updateViewLayout(box, lp) }
+                        }
+                    }
+                    true
+                }
+                else -> false
+            }
+        }
         wm.addView(box, lp)
         menuRoot = box
+    }
+
+    /** A ScrollView that never grows taller than [maxH] pixels. */
+    private class MaxHeightScrollView(ctx: Context, private val maxH: Int) : ScrollView(ctx) {
+        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+            super.onMeasure(widthMeasureSpec, View.MeasureSpec.makeMeasureSpec(maxH, View.MeasureSpec.AT_MOST))
+        }
     }
 
     override fun onDestroy() {
         main.removeCallbacksAndMessages(null)
         menuRoot?.let { runCatching { wm.removeView(it) } }
-        if (::iv.isInitialized) iv.detach()
         display?.release()
         if (::projection.isInitialized) projection.stop()
         super.onDestroy()

@@ -44,13 +44,20 @@ class MainActivity : AppCompatActivity() {
         col.addView(button("1. Allow notifications") {
             if (Build.VERSION.SDK_INT >= 33) notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         })
-        col.addView(button("2. Allow display over other apps") {
+        col.addView(button("2. Allow restricted settings (Android 13+)") {
+            startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+        })
+        col.addView(hint("Opens Trainer Lens's App info page. Tap the ⋮ (three dots, top right) → \"Allow restricted settings\" → confirm. " +
+            "Needed because the app wasn't installed from the Play Store; without it step 3 is greyed out. No option in the ⋮ menu? Tap step 3 once first (Android blocks it), then come back here."))
+        col.addView(button("3. Allow display over other apps") {
             startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
         })
-        col.addView(button("3. Don't restrict battery (recommended)") {
+        col.addView(button("4. Don't restrict battery (recommended)") {
             startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
         })
-        col.addView(button("4. Start (asks for screen capture)") { start() })
+        col.addView(button("5. ▶ Start session") { start() })
+        col.addView(hint("Asks to record the screen – choose \"Entire screen\". Drag the 🔍 bubble anywhere; tap it for the 🎒 Bag and 📊 IV tabs. " +
+            "Items you scroll past are remembered until you tap Reset or Stop."))
         col.addView(TextView(this).apply {
             setPadding(0, 40, 0, 0); textSize = 12f
             text = """Please note
@@ -65,6 +72,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onResume() { super.onResume(); refresh() }
+
+    private fun hint(t: String) = TextView(this).apply { text = t; textSize = 12f; alpha = 0.7f; setPadding(8, 0, 8, 16) }
 
     private fun button(label: String, action: () -> Unit) = Button(this).apply { text = label; setOnClickListener { action() } }
 

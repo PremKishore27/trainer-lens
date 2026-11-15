@@ -4,10 +4,11 @@ Trainer Lens isn't on the Play Store, so Android adds a few extra safety prompts
 
 1. **Download** the `.apk` above on your phone and open it. Allow your browser / file manager to *install unknown apps* if asked.
 2. **Google Play Protect** may offer to scan the app. Tap **Install without scanning** (or let it scan — it won't find anything).
-3. Open Trainer Lens. If **"Display over other apps"** is greyed out or blocked:
-   *Settings → Apps → Trainer Lens → ⋮ (top right) → **Allow restricted settings*** → confirm, then go back and enable it.
-4. In the app tap steps **1 → 4**. Step 4 asks to record the screen – choose **Entire screen**.
-5. Switch to Pokémon GO. Tap the 🔍 bubble for the bag advisor; the IV card appears by itself on a Pokémon's page.
+3. Open Trainer Lens and tap steps **1 → 5**. Step **2 – Allow restricted settings** is the Android one people miss:
+   it opens Trainer Lens's **App info** page → tap **⋮ (three dots, top right)** → **Allow restricted settings** → confirm.
+   Without it, *Display over other apps* (step 3) stays greyed out. *(Settings → Apps → Trainer Lens → ⋮ → Allow restricted settings.)*
+4. Step 5 **▶ Start session** asks to record the screen – choose **Entire screen**.
+5. Switch to Pokémon GO. **Drag the 🔍 bubble** anywhere; tap it for the **🎒 Bag** and **📊 IV** tabs.
 
 **Updating:** install the new APK over the old one – your settings and permissions stay.
 *Coming from a build before v0.2.4? Uninstall the old one once first (it used a different signing key).*
