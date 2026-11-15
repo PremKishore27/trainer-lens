@@ -180,6 +180,7 @@ class NicknameTest {
             val tokens = page(
                 "Nick", 100, 50, null, base.name, s.types.joinToString(" / ").uppercase(),
                 weight = sz?.let { "%.2fkg".format(it.second) }, height = sz?.let { "%.2fm".format(it.first) },
+                evolve = db.evolveCosts[s.dex]?.minOrNull(), // the EVOLVE button shows only on Pokémon that can evolve
             )
             val g = SpeciesDb.guess(tokens, H, db)
             val top = g?.candidates?.firstOrNull()
@@ -187,7 +188,7 @@ class NicknameTest {
             if (g == null || top == null || top.dex != s.dex || top.types != s.types) bad += "${s.label} -> ${top?.label}"
         }
         println("renamed lookup checked for $n forms, ${bad.size} wrong: $bad")
-        assertTrue("${bad.size} wrong, e.g. ${bad.take(25)}", bad.size <= n / 100) // size can't tell apart some same-type twins
+        assertTrue("${bad.size} wrong, e.g. ${bad.take(25)}", bad.size <= 4) // Palafin Hero/Zero etc. are the same page
     }
 
     @Test fun pvpTableMatchesLinearSearch() {

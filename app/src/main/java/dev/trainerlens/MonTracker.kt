@@ -22,6 +22,7 @@ class Mon(val cp: Int, val hp: Int) {
     private var heightM: Double? = null
     private var weightKg: Double? = null
     private var evolveCost: Int? = null
+    private var evolveSeen = false
 
     fun add(c: Clues, dust: Int?) {
         frames++
@@ -30,6 +31,7 @@ class Mon(val cp: Int, val hp: Int) {
         if (c.types.isNotEmpty()) typeVotes.merge(c.types, 1, Int::plus)
         dust?.let { dustVotes.merge(it, 1, Int::plus) }
         c.heightM?.let { heightM = it }; c.weightKg?.let { weightKg = it }; c.evolveCost?.let { evolveCost = it }
+        if (c.evolveButton) evolveSeen = true // seen on any frame counts: OCR missing it is likelier than a phantom button
     }
 
     /** The most-seen reading of each clue so far. */
@@ -37,7 +39,7 @@ class Mon(val cp: Int, val hp: Int) {
         names = nameVotes.keys.toList(),
         family = familyVotes.maxByOrNull { it.value }?.key?.let { families[it] },
         types = typeVotes.maxByOrNull { it.value }?.key ?: emptySet(),
-        heightM = heightM, weightKg = weightKg, evolveCost = evolveCost,
+        heightM = heightM, weightKg = weightKg, evolveCost = evolveCost, evolveButton = evolveSeen,
     )
 
     val dust: Int? get() = dustVotes.maxByOrNull { it.value }?.key
@@ -48,7 +50,7 @@ class Mon(val cp: Int, val hp: Int) {
     fun signature(): String {
         val c = clues()
         return "${c.names.map { it.id + it.form }.sorted()}|${c.family?.firstOrNull()?.dex}|${c.types.sorted()}|" +
-            "${c.heightM}|${c.weightKg}|${c.evolveCost}|$dust|$appraised|${forced?.let { it.id + it.form }}|$arcLevel|$provisional"
+            "${c.heightM}|${c.weightKg}|${c.evolveCost}|${c.evolveButton}|$dust|$appraised|${forced?.let { it.id + it.form }}|$arcLevel|$provisional"
     }
 }
 

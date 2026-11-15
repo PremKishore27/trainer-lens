@@ -53,6 +53,8 @@ data class Clues(
     val heightM: Double? = null,
     val weightKg: Double? = null,
     val evolveCost: Int? = null,
+    /** An EVOLVE button was on the page (final evolutions have none). */
+    val evolveButton: Boolean = false,
 )
 
 data class SpeciesGuess(
@@ -211,7 +213,8 @@ object SpeciesDb {
 
         val height = tokens.firstNotNullOfOrNull { mRx.find(it.text)?.groupValues?.get(1)?.replace(',', '.')?.toDoubleOrNull() }
         val weight = tokens.firstNotNullOfOrNull { kgRx.find(it.text)?.groupValues?.get(1)?.replace(',', '.')?.toDoubleOrNull() }
-        return Clues(names.toList(), family, typesOnScreen(tokens, screenH), height, weight, evolveCost(tokens, screenH, d))
+        return Clues(names.toList(), family, typesOnScreen(tokens, screenH), height, weight, evolveCost(tokens, screenH, d),
+            tokens.any { evolveRx.containsMatchIn(it.text) })
     }
 
     /** Candy-cost number on the EVOLVE button, e.g. 25 (Dratini) or 100 (Dragonair). */
@@ -311,7 +314,10 @@ object SpeciesDb {
     /** Soft evidence that [sp] is the Pokémon on screen: evolve cost and size. Higher = more likely. */
     fun score(sp: Species, c: Clues, d: Data): Double {
         var s = 0.0
-        c.evolveCost?.let { s += if (d.evolveCosts[sp.dex]?.contains(it) == true) 10.0 else -10.0 }
+        val evolvable = d.evolveCosts[sp.dex]?.isNotEmpty() == true
+        if (c.evolveCost != null) s += if (d.evolveCosts[sp.dex]?.contains(c.evolveCost) == true) 10.0 else -10.0
+        else if (c.evolveButton && !evolvable) s -= 2.0   // a button was there, so it can still evolve
+        else if (!c.evolveButton && evolvable) s -= 1.0   // no button: probably a final evolution (soft: OCR can miss it)
         val sz = d.size[sp.dex to sp.form.lowercase()] ?: d.size[sp.dex to "normal"]
         if (sz != null) {
             c.heightM?.let { if (it > 0 && sz.first > 0) s -= abs(ln(it / sz.first)) }
