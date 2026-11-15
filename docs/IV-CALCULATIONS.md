@@ -107,13 +107,45 @@ That's normal for low-level Pokémon – the higher the level, the fewer spreads
 
 **Check against known values:** a 15/15/15 Mewtwo (base 300 / 182 / 214) gives **CP 4178 at level 40** and **4724 at level 50**, matching the game.
 
+## 4b. Exact IVs from the in-game appraisal (Poké Genie style)
+
+CP + HP + stardust often leave several possible spreads. The game's **appraisal** shows the exact values as three bars,
+so when you appraise (☰ → Appraise) the app measures them from the screenshot:
+
+1. Text recognition finds the **Attack**, **Defense** and **HP** labels.
+2. Just below each label it scans pixel rows for the bar: the longest run of non-white pixels (small white dividers between the
+   three bar segments are bridged).
+3. It measures how far the **coloured fill** (orange, or red when full) reaches:
+   `IV = round(fill width / bar width × 15)`.
+4. The three values must come out the same on **two frames in a row**.
+5. Cross-check: the spread must also reproduce the CP and HP. If a bar was misjudged by one point, the closest spread
+   that fits CP/HP is used. The card then says **✔ from appraisal** and shows the exact level.
+
+**Example – Kingdra** (base 194 / 194 / 181), appraisal 15 / 13 / 13:
+CP 2578 and HP 152 fit at **level 39** (CPM 0.78463697) → **91 % · Excellent ★★★ · Lv 39**.
+
+**Example – Empoleon** (base 210 / 186 / 197), appraisal 14 / 14 / 13 = 41 / 45 → **91 % · Excellent ★★★**
+(at level 38 that's CP 2785, HP 163).
+
+### Steady readings
+- A Pokémon's CP/HP/dust only count when they're read **identically on two frames** (1 second apart), so a Pokémon's
+  animation passing over the CP doesn't produce a wrong number.
+- Common OCR look-alikes are corrected (O→0, l/I→1, S→5, B→8, Z→2).
+- CP is only read from the top third of the screen.
+- If the stardust number was misread and nothing fits, the app retries with every level.
+
+### Why not the level arc?
+Poké Genie can also read the white dot on the level arc. That needs your **trainer level** and a per-phone calibration of
+the arc's centre and radius, and it only distinguishes half-levels that the stardust already narrows to 2 levels. The
+appraisal bars give the exact IVs (and with them the exact level), so the arc isn't used for now.
+
 ## 5. Regional forms
 
 The database has separate base stats for Alolan, Galarian, Hisuian and other forms, but the screen only shows
 "Vulpix". The app tries every form of that Pokémon (normal form first). If more than one form fits, the card says
 **"Also fits: Vulpix (Alola)"**.
 
-## 6. PvP league ranks
+## 6. PvP league ranks and the verdict line
 
 For each league the app computes, for all 4,096 spreads, the **highest level (up to 50) that stays at or below the CP cap**:
 
@@ -135,6 +167,18 @@ why a 0/15/15 can beat a 15/15/15 in Great League.
 
 The rank only compares spreads **within the same species** – it doesn't say whether the species itself is good in PvP.
 Master League has no cap, so there the plain IV % is what matters.
+
+**The card's one-line verdict:**
+
+| Verdict | Rule |
+|---|---|
+| ✅ Good for *Great/Ultra/Little* League (#n) | rank ≤ 100 of 4,096 **and** its CP is still at or below that league's cap |
+| 🤔 Maybe good | only some of the possible spreads are in the top 100 – appraise to be sure |
+| ✅ Good IVs for Master League | every possible spread is ≥ 42 / 45 (93 %) and CP > 2,500 |
+| ❌ CP too high for … League | the spread would rank top 100, but the Pokémon is already powered past the cap (levels can't go down) |
+| ❌ Not good for PvP | none of the above |
+
+It judges the **IVs only**, not whether the species itself is strong in PvP.
 
 ## 7. Known limits
 

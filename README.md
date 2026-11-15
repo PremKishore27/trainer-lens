@@ -23,7 +23,7 @@ how to clean up your **item bag**, and the **IVs and PvP rank** of any Pokémon 
 |---|---|---|
 | 🖐️ | **Movable overlay** | One 🔍 bubble you can drag anywhere, with 🎒 Bag and 📊 IV tabs. |
 | 🎒 | **Bag advisor** | Remembers your items for the whole session while you scroll. Shows free slots, what you **can remove** (over your keep limit) and what to **keep** – even when the bag isn't full. When it is full, it tells you exactly what to discard to free the slots you want. |
-| 📊 | **IV checker** | Open any Pokémon with the IV tab selected: the card shows **IV %**, appraisal **stars**, the **Attack / Defense / HP** spread, estimated **level**, and **Little / Great / Ultra League rank**. |
+| 📊 | **IV checker** | Open any Pokémon with the IV tab selected. **Appraise it for exact IVs** – the app measures the appraisal bars like Poké Genie. The card shows **IV %**, appraisal **stars**, the **Attack / Defense / HP** spread, estimated **level**, and **Little / Great / Ultra League rank**. |
 | 🌍 | **Regional forms** | Tries Alolan, Galarian, Hisuian and other forms automatically. |
 | ✨ | **Shadow / purified / lucky** | Understands their different stardust costs. |
 | 🔄 | **Always up to date** | Base stats are loaded from the [pogoapi.net](https://pogoapi.net) community database, so new Pokémon work without an app update. |
@@ -31,10 +31,11 @@ how to clean up your **item bag**, and the **IVs and PvP rank** of any Pokémon 
 ### Example IV card
 
 ```
-Pikachu  80.0%  ★★☆
-Atk 12 · Def 12 · HP 12   Lv 20
-CP 510 · HP 73 · ✨2500
-Little #1635 (92.7%) · Great #182 (93.2%) · Ultra #182 (93.2%)
+Kingdra
+91%  15/13/13  Excellent ★★★
+Lv 39 · CP 2578 · HP 152
+PvP: ❌ Not good for PvP
+✔ from appraisal
 ```
 
 Green card = great Pokémon (top-25 PvP rank or ≥ 98 %), yellow = decent, red = weak.
@@ -89,10 +90,15 @@ Tested on: Motorola Signature (Android 17). Requires Android 8.0 or newer.
 Keep limits are in [`Rules.kt`](app/src/main/java/dev/trainerlens/Rules.kt) – earlier items in the list are suggested first.
 
 ### 📊 IV checker
-Tap 🔍 → **📊 IV**, then open a Pokémon. The card shows:
-- **Exact IVs** when only one spread fits, otherwise a **range** with the best and worst possible spread.
-  Low-level Pokémon often give a range – appraise them in-game to narrow it down.
-- **League rank** among all 4,096 spreads of that species (rank #1 = best possible). `n/a` = it can't fit under that CP cap.
+Tap 🔍 → **📊 IV**, then open a Pokémon. For the **exact** result, appraise it in-game (☰ → Appraise) and keep the bars on screen for a second.
+The card shows:
+- **IV % out of 100** – 15/15/15 = 100 %, 12/13/13 = 38/45 = **84 %** – with the spread and a rating (Perfect / Excellent / Good / Decent / Weak).
+- **Level**, CP and HP.
+- **One PvP verdict** – ✅ good for Great / Ultra / Little League (top 100 spread), ❌ not good, or ❌ CP already too high.
+
+Without an appraisal it works from CP + HP + stardust alone: exact when only one spread fits, otherwise a **range**
+like `84–96% (5 possible)` and *"🤔 Maybe good"* if only some of them rank well. Low-level Pokémon often give a range.
+League ranks compare all 4,096 spreads of that species (#1 = best possible) – see [the calculations](docs/IV-CALCULATIONS.md#6-pvp-league-ranks-and-the-verdict-line).
 
 ---
 
