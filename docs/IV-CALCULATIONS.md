@@ -9,7 +9,7 @@ and [`Pvp.kt`](../app/src/main/java/dev/trainerlens/Pvp.kt).
 
 | Input | Where it comes from |
 |---|---|
-| **Species** (and form) | Pokémon name, or the "*NAME* CANDY" line if it has a nickname |
+| **Species** (and form) | the name line, the "*NAME* CANDY" line (same for the whole evolution family – works for nicknames) and the type line ("GRASS / DRAGON") |
 | **CP** | "CP 510" at the top of the page |
 | **Max HP** | "73 / 73 HP" |
 | **Stardust cost** | number next to the **POWER UP** button |
@@ -67,8 +67,10 @@ The level isn't shown anywhere, but the **power-up stardust cost** depends on it
 | 15 – 16.5 | 1,900 | | 35 – 36.5 | 8,000 |
 | 17 – 18.5 | 2,200 | | 37 – 38.5 | 9,000 |
 | 19 – 20.5 | 2,500 | | 39 – 40.5 | 10,000 |
-| | | | 41 – 44.5 | 11,000 |
-| | | | 45 – 48.5 | 12,000 |
+| | | | 41 – 42.5 | 11,000 |
+| | | | 43 – 44.5 | 12,000 |
+| | | | 45 – 46.5 | 13,000 |
+| | | | 47 – 48.5 | 14,000 |
 | | | | 49 – 49.5 | 15,000 |
 
 Special Pokémon pay a different price, so the app also accepts these costs:
@@ -81,7 +83,7 @@ Special Pokémon pay a different price, so the app also accepts these costs:
 | **Lucky** | × 0.5 | 1,250 |
 
 When a cost could mean several things (a shadow's 3,000 looks like a normal Pokémon's 3,000 at level 21), the app tries **all** matching levels.
-Costs above level 40 are less well documented, so neighbouring buckets overlap by half a level to be safe.
+All costs come from the game data ([pogoapi.net `pokemon_powerup_requirements.json`](https://pogoapi.net/api/v1/pokemon_powerup_requirements.json)) and are checked by the unit tests.
 
 ## 4. Solving
 
@@ -134,16 +136,45 @@ CP 2578 and HP 152 fit at **level 39** (CPM 0.78463697) → **91 % · Excellent 
 - CP is only read from the top third of the screen.
 - If the stardust number was misread and nothing fits, the app retries with every level.
 
-### Why not the level arc?
-Poké Genie can also read the white dot on the level arc. That needs your **trainer level** and a per-phone calibration of
-the arc's centre and radius, and it only distinguishes half-levels that the stardust already narrows to 2 levels. The
-appraisal bars give the exact IVs (and with them the exact level), so the arc isn't used for now.
+### The level arc (Poké Genie / GoIV idea)
+On a Pokémon's page a white dot sits on a half-circle above it. Its position is
 
-## 5. Regional forms
+```
+arc fraction = (CPM(level) − CPM(1)) / (CPM(maxLevel) − CPM(1))
+maxLevel     = min(trainer level + 10, 50)    (the highest level you can power it to)
+```
 
-The database has separate base stats for Alolan, Galarian, Hisuian and other forms, but the screen only shows
-"Vulpix". The app tries every form of that Pokémon (normal form first). If more than one form fits, the card says
-**"Also fits: Vulpix (Alola)"**.
+Every phone draws the arc slightly differently, so Trainer Lens **calibrates itself** instead of using fixed numbers:
+
+1. **Finding the dot:** pure-white pixels in the top half are *eroded* (only pixels whose whole neighbourhood is white
+   survive), which removes the thin arc line and the CP text and leaves the filled dot. Round blobs of the right size are kept.
+2. **Arc geometry:** the dots of different Pokémon all lie on one circle centred horizontally on the screen.
+   After ≥ 4 well-spread dots, a RANSAC + least-squares circle fit gives its centre height and radius (saved per screen size).
+3. **maxLevel:** the first time an appraisal gives a Pokémon's exact level, maxLevel is solved from the formula above.
+4. From then on the dot's angle gives a level estimate, used as a **soft hint**: spreads within ±¾ level of it are
+   preferred, and if none fit, the arc is ignored. So the arc can only narrow a range, never make a result wrong.
+
+The card's last line shows the arc's state: *learning (n dots)*, *appraise 1 Pokémon to finish*, *arc ✓* or *arc ✓ used*.
+
+## 5. Which Pokémon is it? (nicknames and regional forms)
+
+1. **Name** – the name line is matched against all Pokémon names.
+2. **Candy** – "DRATINI CANDY" means Dratini, Dragonair or Dragonite (the evolution family, built from
+   [`pokemon_evolutions.json`](https://pogoapi.net/api/v1/pokemon_evolutions.json)). If the name isn't a Pokémon – a
+   **nickname** – the family is used instead, and a nickname that happens to be another Pokémon's name is ignored.
+3. **Types** – "GRASS / DRAGON" (read above the POWER UP button, so a move called *Psychic* doesn't count) picks the
+   form: **Alolan Exeggutor** is Grass/Dragon, the normal one Grass/Psychic.
+
+The remaining candidates are all run through the solver; with an appraisal, the one matching the bars wins.
+If another form also fits, the card says **"Also fits: …"**.
+
+## 5b. Automated checks
+
+Every build runs unit tests against snapshots of the game data:
+- CP multipliers and stardust costs equal the game master values for every level.
+- **Every Pokémon and form (1,168)** × 5 IV spreads × 13 levels × normal/shadow/purified/lucky stardust
+  (≈ 76,000 cases): the true spread is always among the results, and with the appraisal it's exact, at the right level and form.
+- Nickname lookup via candy works for every Pokémon; Alolan Exeggutor is told apart by type; OCR look-alikes (`CP 2S78`) are fixed.
 
 ## 6. PvP league ranks and the verdict line
 
@@ -182,7 +213,7 @@ It judges the **IVs only**, not whether the species itself is strong in PvP.
 
 ## 7. Known limits
 
-- **Mega-evolved** Pokémon and **best-buddy boosted** CP (+1 level) can give "no match".
+- **Mega-evolved** Pokémon can give "no match". Best-buddy boosted Pokémon (up to level 51) are included.
 - Low-level Pokémon often fit many spreads, so you get a range.
 - Text recognition can misread a digit; the card updates every second, so look at it for a moment.
 - English (and partly German) game language only.

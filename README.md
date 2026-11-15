@@ -24,7 +24,9 @@ how to clean up your **item bag**, and the **IVs and PvP rank** of any Pokémon 
 | 🖐️ | **Movable overlay** | One 🔍 bubble you can drag anywhere, with 🎒 Bag and 📊 IV tabs. |
 | 🎒 | **Bag advisor** | Remembers your items for the whole session while you scroll. Shows free slots, what you **can remove** (over your keep limit) and what to **keep** – even when the bag isn't full. When it is full, it tells you exactly what to discard to free the slots you want. |
 | 📊 | **IV checker** | Open any Pokémon with the IV tab selected. **Appraise it for exact IVs** – the app measures the appraisal bars like Poké Genie. The card shows **IV %**, appraisal **stars**, the **Attack / Defense / HP** spread, estimated **level**, and **Little / Great / Ultra League rank**. |
-| 🌍 | **Regional forms** | Tries Alolan, Galarian, Hisuian and other forms automatically. |
+| 🌍 | **Nicknames & regional forms** | Finds the species from its candy and types, so nicknamed Pokémon and Alolan / Galarian / Hisuian forms work. |
+| 🎯 | **Level arc** | Reads the white dot on the level arc (like Poké Genie) and calibrates itself to your phone. |
+| ✅ | **Tested on every Pokémon** | Each build checks ~76,000 cases across all 1,168 forms against the game data. |
 | ✨ | **Shadow / purified / lucky** | Understands their different stardust costs. |
 | 🔄 | **Always up to date** | Base stats are loaded from the [pogoapi.net](https://pogoapi.net) community database, so new Pokémon work without an app update. |
 
@@ -118,7 +120,7 @@ League ranks compare all 4,096 spreads of that species (#1 = best possible) – 
 ## Limitations
 
 - English game language (German labels partly supported).
-- Mega-evolved and best-buddy-boosted Pokémon may show "no match".
+- Mega-evolved Pokémon may show "no match".
 - Text recognition can misread a digit – give the card a second to settle.
 - Stickers and scrapbook pages aren't counted in the bag advisor yet.
 
