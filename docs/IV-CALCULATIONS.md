@@ -186,7 +186,11 @@ If the clues above ever fail on your phone, 📋 *Copy screen text* shows what w
 Identity is just **CP + HP**. Everything else is *collected* over frames of the same Pokémon (the most-seen candy family, types,
 stardust, the EVOLVE button on any frame), so a line missing or misread in one frame no longer changes the answer.
 - A page with new CP/HP is shown **from its first frame** (marked ⏳) if some species fits it; the second frame confirms it.
-- A reading that fits **no** IV spread (an animation over a digit) is ignored unless it's seen twice.
+- A reading that fits **no** IV spread (an animation over a digit) is ignored unless it's seen twice, and a *best guess*
+  (species searched from types / size) also needs two frames. If a misread that happened to fit flips back to the real
+  reading, the previous Pokémon is restored with its appraisal.
+- Size and EVOLVE readings use the most-seen value, so one OCR slip can't reorder a family.
+- Scan speed: ~100 ms between scans while a Pokémon page is changing, ~300 ms once it's settled, ~500 ms when no Pokémon page is on screen.
 
 ## 5b. Automated checks
 

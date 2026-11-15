@@ -110,7 +110,9 @@ class NicknameTest {
     @Test fun noCandyNoTypesButSizeAndDustFindsIt() {
         val s = sp("Dragonite"); val (cp, hp, dust) = fits(s, Iv(15, 14, 15), 36.0)
         val tr = tracker()
-        feed(tr, page("Dino", cp, hp, dust, null, "DRAGON / FLYING", weight = "210.40kg", height = "2.25m"))
+        val f = page("Dino", cp, hp, dust, null, "DRAGON / FLYING", weight = "210.40kg", height = "2.25m")
+        assertFalse(feed(tr, f)); assertNull(tr.result)                       // a best guess needs a second frame
+        assertTrue(feed(tr, f))
         assertEquals("Dragonite", tr.result!!.species.name); assertTrue(tr.result!!.guessed)
     }
 
@@ -162,6 +164,25 @@ class NicknameTest {
         feed(tr, page("Dino", cp + 7, hp, dust, "Dratini", "DRAGON / FLYING")) // may be shown once, provisional
         feed(tr, page("Dino", cp, hp, dust, "Dratini", "DRAGON / FLYING"))
         assertEquals(cp, tr.current!!.cp)
+    }
+
+    @Test fun flipBackRestoresThePokemonWithItsAppraisal() {
+        val s = sp("Dragonite"); val iv = Iv(9, 9, 9); val (cp, hp, dust) = fits(s, iv, 30.0)
+        val tr = tracker(); val pg = page("Dino", cp, hp, dust, "Dratini", "DRAGON / FLYING")
+        feed(tr, pg); feed(tr, pg); tr.observeBars(iv); tr.observeBars(iv)
+        assertEquals(iv, tr.result!!.exact)
+        feed(tr, page("Dino", cp + 7, hp, dust, "Dratini", "DRAGON / FLYING")) // blip
+        feed(tr, pg)
+        assertEquals(cp, tr.current!!.cp); assertEquals(iv, tr.current!!.appraised); assertEquals(iv, tr.result!!.exact)
+    }
+
+    @Test fun aSizeSlipOnOneFrameDoesNotReorderTheFamily() {
+        val s = sp("Dragonair"); val (cp, hp, dust) = fits(s, Iv(8, 8, 8), 8.0)
+        val tr = tracker()
+        val good = page("A", cp, hp, dust, "Dratini", "DRAGON", weight = "16.20kg", height = "4.10m")
+        val slip = page("A", cp, hp, dust, "Dratini", "DRAGON", weight = "3.20kg", height = "1.70m") // looks like a Dratini
+        feed(tr, good); feed(tr, good); feed(tr, slip)
+        assertEquals("Dragonair", SpeciesDb.candidates(tr.current!!.clues(), db)!!.candidates.first().name)
     }
 
     @Test fun sizeAndEvolveCostParsing() {

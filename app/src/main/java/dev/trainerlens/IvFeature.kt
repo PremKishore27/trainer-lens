@@ -39,12 +39,15 @@ class IvFeature(private val ctx: Context, private val worker: Executor) {
     // worker-thread state
     private val tracker = MonTracker { m -> SpeciesDb.get()?.let { Identify.analyze(m, it) } }
     private var arc: ArcReader? = null
-    private var lastSeen = 0L
+    @Volatile private var lastSeen = 0L
     private var shown = ""
     private var lastTokens: List<Token> = emptyList()
     private var lastScreenH = 0
     private var ocrMs = 0L
     private var analysisMs = 0L
+
+    /** A Pokémon page was read within the last 3 s – worth scanning fast. Otherwise (map, other screens) scan slowly. */
+    fun pageRecentlySeen(now: Long) = now - lastSeen < 3_000
 
     /** True while a Pokémon is shown and nothing is changing – the scan loop can then slow down to save battery. */
     @Volatile var settled = false; private set

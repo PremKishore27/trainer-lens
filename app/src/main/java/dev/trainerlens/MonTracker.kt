@@ -19,9 +19,9 @@ class Mon(val cp: Int, val hp: Int) {
     private val familyVotes = HashMap<Int, Int>()
     private val typeVotes = HashMap<Set<String>, Int>()
     private val dustVotes = HashMap<Int, Int>()
-    private var heightM: Double? = null
-    private var weightKg: Double? = null
-    private var evolveCost: Int? = null
+    private val heightVotes = HashMap<Double, Int>()
+    private val weightVotes = HashMap<Double, Int>()
+    private val evolveVotes = HashMap<Int, Int>()
     private var evolveSeen = false
 
     fun add(c: Clues, dust: Int?) {
@@ -30,7 +30,10 @@ class Mon(val cp: Int, val hp: Int) {
         c.family?.firstOrNull()?.let { families[it.dex] = c.family; familyVotes.merge(it.dex, 1, Int::plus) }
         if (c.types.isNotEmpty()) typeVotes.merge(c.types, 1, Int::plus)
         dust?.let { dustVotes.merge(it, 1, Int::plus) }
-        c.heightM?.let { heightM = it }; c.weightKg?.let { weightKg = it }; c.evolveCost?.let { evolveCost = it }
+        // most-seen reading wins, so a one-off OCR slip can't reorder the candidates
+        c.heightM?.let { heightVotes.merge(Math.round(it * 100) / 100.0, 1, Int::plus) }
+        c.weightKg?.let { weightVotes.merge(Math.round(it * 100) / 100.0, 1, Int::plus) }
+        c.evolveCost?.let { evolveVotes.merge(it, 1, Int::plus) }
         if (c.evolveButton) evolveSeen = true // seen on any frame counts: OCR missing it is likelier than a phantom button
     }
 
@@ -39,7 +42,8 @@ class Mon(val cp: Int, val hp: Int) {
         names = nameVotes.keys.toList(),
         family = familyVotes.maxByOrNull { it.value }?.key?.let { families[it] },
         types = typeVotes.maxByOrNull { it.value }?.key ?: emptySet(),
-        heightM = heightM, weightKg = weightKg, evolveCost = evolveCost, evolveButton = evolveSeen,
+        heightM = heightVotes.maxByOrNull { it.value }?.key, weightKg = weightVotes.maxByOrNull { it.value }?.key,
+        evolveCost = evolveVotes.maxByOrNull { it.value }?.key, evolveButton = evolveSeen,
     )
 
     val dust: Int? get() = dustVotes.maxByOrNull { it.value }?.key
@@ -65,21 +69,33 @@ class MonTracker(private val analyze: (Mon) -> IvResult?) {
     var result: IvResult? = null; private set
     private var sig = ""
     private var bad: Mon? = null
+    private var previous: Mon? = null
     private var pendingBars: Iv? = null
 
     /** @return true when what should be shown has changed */
     fun observe(cp: Int, hp: Int, dust: Int?, clues: Clues): Boolean {
         val cur = current
         if (cur != null && cur.cp == cp && cur.hp == hp) { cur.add(clues, dust); return refresh(cur) }
+        // a one-frame blip (a misread that happened to fit) flipping back: restore the Pokémon we had, with its appraisal
+        val prev = previous
+        if (prev != null && prev.cp == cp && prev.hp == hp && (cur == null || cur.frames < 2)) {
+            previous = null; bad = null; pendingBars = null
+            prev.add(clues, dust); current = prev; result = analyze(prev); sig = prev.signature(); return true
+        }
         val cand = Mon(cp, hp).also { it.add(clues, dust) }
         val r = analyze(cand)
-        if (r != null) { current = cand; result = r; sig = cand.signature(); bad = null; pendingBars = null; return true }
+        // A "best guess" (species searched from types / size) is only trusted once the same reading is seen twice
+        if (r != null && !r.guessed) { commit(cand, r); return true }
         val b = bad
         if (b != null && b.cp == cp && b.hp == hp) {
             b.add(clues, dust)
-            if (b.frames >= 2) { current = b; result = analyze(b); sig = b.signature(); bad = null; pendingBars = null; return true }
+            if (b.frames >= 2) { commit(b, analyze(b)); return true }
         } else bad = cand
         return false
+    }
+
+    private fun commit(m: Mon, r: IvResult?) {
+        previous = current; current = m; result = r; sig = m.signature(); bad = null; pendingBars = null
     }
 
     /** Appraisal bars count once they're read identically on two frames. */
@@ -111,7 +127,7 @@ class MonTracker(private val analyze: (Mon) -> IvResult?) {
         sig = ""; return refresh(cur)
     }
 
-    fun reset() { current = null; result = null; sig = ""; bad = null; pendingBars = null }
+    fun reset() { current = null; result = null; sig = ""; bad = null; previous = null; pendingBars = null }
 }
 
 /** The species decision for one Pokémon, shared by the app and the tests. */

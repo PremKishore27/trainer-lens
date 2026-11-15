@@ -99,7 +99,12 @@ class CaptureService : Service() {
     private fun scheduleNext() {
         if (destroyed) return
         val delay = when {
-            ivActive() -> if (::iv.isInitialized && iv.settled) 300L else 100L
+            ivActive() && ::iv.isInitialized -> when {
+                iv.settled -> 300L                                                 // nothing is changing
+                iv.pageRecentlySeen(SystemClock.elapsedRealtime()) -> 100L          // a Pokémon page is changing / swiping
+                else -> 500L                                                       // no Pokémon page on screen: don't burn battery
+            }
+            ivActive() -> 500L
             else -> 1000L
         }
         main.postDelayed(scanTask, delay)
