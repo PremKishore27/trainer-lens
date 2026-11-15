@@ -23,6 +23,8 @@ class Mon(val cp: Int, val hp: Int) {
     private val weightVotes = HashMap<Double, Int>()
     private val evolveVotes = HashMap<Int, Int>()
     private var evolveSeen = false
+    private val caughtVotes = HashMap<String, Int>()
+    private val caughtOf = HashMap<String, List<Species>>()
 
     fun add(c: Clues, dust: Int?) {
         frames++
@@ -34,6 +36,7 @@ class Mon(val cp: Int, val hp: Int) {
         c.heightM?.let { heightVotes.merge(Math.round(it * 100) / 100.0, 1, Int::plus) }
         c.weightKg?.let { weightVotes.merge(Math.round(it * 100) / 100.0, 1, Int::plus) }
         c.evolveCost?.let { evolveVotes.merge(it, 1, Int::plus) }
+        c.caught.firstOrNull()?.let { caughtOf[it.id] = c.caught; caughtVotes.merge(it.id, 1, Int::plus) }
         if (c.evolveButton) evolveSeen = true // seen on any frame counts: OCR missing it is likelier than a phantom button
     }
 
@@ -44,6 +47,7 @@ class Mon(val cp: Int, val hp: Int) {
         types = typeVotes.maxByOrNull { it.value }?.key ?: emptySet(),
         heightM = heightVotes.maxByOrNull { it.value }?.key, weightKg = weightVotes.maxByOrNull { it.value }?.key,
         evolveCost = evolveVotes.maxByOrNull { it.value }?.key, evolveButton = evolveSeen,
+        caught = caughtVotes.maxByOrNull { it.value }?.key?.let { caughtOf[it] }.orEmpty(),
     )
 
     val dust: Int? get() = dustVotes.maxByOrNull { it.value }?.key
@@ -54,7 +58,7 @@ class Mon(val cp: Int, val hp: Int) {
     fun signature(): String {
         val c = clues()
         return "${c.names.map { it.id + it.form }.sorted()}|${c.family?.firstOrNull()?.dex}|${c.types.sorted()}|" +
-            "${c.heightM}|${c.weightKg}|${c.evolveCost}|${c.evolveButton}|$dust|$appraised|${forced?.let { it.id + it.form }}|$arcLevel|$provisional"
+            "${c.heightM}|${c.weightKg}|${c.evolveCost}|${c.evolveButton}|${c.caught.firstOrNull()?.id}|$dust|$appraised|${forced?.let { it.id + it.form }}|$arcLevel|$provisional"
     }
 }
 
@@ -125,6 +129,13 @@ class MonTracker(private val analyze: (Mon) -> IvResult?) {
         cur.forced = sp
         if (analyze(cur) == null) { cur.forced = old; return false }
         sig = ""; return refresh(cur)
+    }
+
+    /** The page shows this HP but no readable CP. If it isn't the Pokémon we're showing, forget that one. */
+    fun hpOnly(hp: Int): Boolean {
+        val c = current ?: return false
+        if (c.hp == hp) return false
+        reset(); return true
     }
 
     fun reset() { current = null; result = null; sig = ""; bad = null; previous = null; pendingBars = null }

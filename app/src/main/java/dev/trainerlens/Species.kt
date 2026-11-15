@@ -55,6 +55,8 @@ data class Clues(
     val evolveCost: Int? = null,
     /** An EVOLVE button was on the page (final evolutions have none). */
     val evolveButton: Boolean = false,
+    /** Species named in "This Dragonite was caught on …" at the bottom of the page – the most reliable clue. */
+    val caught: List<Species> = emptyList(),
 )
 
 data class SpeciesGuess(
@@ -195,6 +197,8 @@ object SpeciesDb {
     private val powerUpRx = Regex("power[\\s-]*up", RegexOption.IGNORE_CASE)
     private val kgRx = Regex("(\\d{1,4}[.,]\\d{1,2})\\s*kg", RegexOption.IGNORE_CASE)
     private val mRx = Regex("(\\d{1,2}[.,]\\d{1,2})\\s*m(?![a-zA-Z])", RegexOption.IGNORE_CASE)
+    // "This Dragonite was caught on 13/11/2026", "… was hatched / traded / received …", German "Dieses Dragoran wurde …"
+    private val caughtRx = Regex("\\b(?:this|dieses|diese|dieser)\\s+(.+?)\\s+(?:was|wurde)\\b", RegexOption.IGNORE_CASE)
 
     /** Reads every identity clue from the OCR tokens of one frame. */
     fun readClues(tokens: List<Token>, screenH: Int, d: Data? = data): Clues {
@@ -213,8 +217,11 @@ object SpeciesDb {
 
         val height = tokens.firstNotNullOfOrNull { mRx.find(it.text)?.groupValues?.get(1)?.replace(',', '.')?.toDoubleOrNull() }
         val weight = tokens.firstNotNullOfOrNull { kgRx.find(it.text)?.groupValues?.get(1)?.replace(',', '.')?.toDoubleOrNull() }
+        val caught = tokens.firstNotNullOfOrNull { t ->
+            caughtRx.find(t.text)?.groupValues?.get(1)?.let { lookup(Rules.norm(it), d) }?.takeIf { it.isNotEmpty() }
+        }.orEmpty()
         return Clues(names.toList(), family, typesOnScreen(tokens, screenH), height, weight, evolveCost(tokens, screenH, d),
-            tokens.any { evolveRx.containsMatchIn(it.text) })
+            tokens.any { evolveRx.containsMatchIn(it.text) }, caught)
     }
 
     /** Candy-cost number on the EVOLVE button, e.g. 25 (Dratini) or 100 (Dragonair). */
@@ -301,8 +308,11 @@ object SpeciesDb {
         val out = HashSet<String>()
         for (t in tokens) {
             if (screenH > 0 && t.box.centerY() >= limit) continue
-            val words = t.text.lowercase().split(Regex("[^a-z]+")).filter { it.isNotEmpty() }
-            if (words.isNotEmpty() && words.size <= 2 && words.all { it in TYPES }) out += words
+            // "DRAGON / FLY": a type word cut off at the edge still counts if it's the start of exactly one type
+            val words = t.text.lowercase().split(Regex("[^a-z]+")).filter { it.isNotEmpty() }.map { w ->
+                if (w in TYPES) w else TYPES.filter { w.length >= 3 && it.startsWith(w) }.singleOrNull()
+            }
+            if (words.isNotEmpty() && words.size <= 2 && words.all { it != null }) out += words.filterNotNull()
         }
         return if (out.size <= 2) out else emptySet()
     }
@@ -326,9 +336,23 @@ object SpeciesDb {
         return s
     }
 
+    /** More than 8× off the species' average weight – no XXS/XXL Pokémon is that far off. */
+    private fun wrongSize(sp: Species, c: Clues, d: Data): Boolean {
+        val w = c.weightKg ?: return false
+        val avg = (d.size[sp.dex to sp.form.lowercase()] ?: d.size[sp.dex to "normal"])?.second ?: return false
+        return w > 0 && avg > 0 && abs(ln(w / avg)) > ln(8.0)
+    }
+
     /** The likely species, most likely first, from name / candy family / types, ordered by size and evolve cost. */
     fun candidates(c: Clues, d: Data? = data): SpeciesGuess? {
         d ?: return null
+        // "This Dragonite was caught on …" names the species outright; types pick the form
+        if (c.caught.isNotEmpty()) {
+            val forms = c.caught.flatMap { sp -> d.byName[sp.id].orEmpty() }.distinct()
+            val byType = if (c.types.isEmpty()) forms else forms.filter { it.types == c.types }.ifEmpty { forms.filter { it.types.containsAll(c.types) } }
+            val nick = c.names.none { n -> forms.any { it.dex == n.dex } }
+            return SpeciesGuess(byType.ifEmpty { forms }, nick)
+        }
         val fam = c.family
         var nickname = false
         var cands: List<Species> = when {
@@ -340,7 +364,14 @@ object SpeciesDb {
         if (c.types.isNotEmpty()) {
             val exact = cands.filter { it.types == c.types }
             val partial = cands.filter { it.types.containsAll(c.types) }
-            cands = exact.ifEmpty { partial }.ifEmpty { cands }
+            // A name whose types don't match the page is a nickname that happens to be a Pokémon ("CutieFly" on a
+            // Dragon/Flying Pokémon): don't trust it. With no candy family left, let the widened search decide.
+            cands = exact.ifEmpty { partial }.ifEmpty { if (fam == null) return null else fam }
+        }
+        if (fam == null) {
+            // same for a name that is wildly the wrong size (Cutiefly 0.2 kg vs. 314 kg on screen)
+            cands = cands.filter { sp -> !wrongSize(sp, c, d) }
+            if (cands.isEmpty()) return null
         }
         val named = c.names.toSet()
         cands = cands.sortedWith(compareByDescending<Species> { it in named }.thenByDescending { score(it, c, d) })

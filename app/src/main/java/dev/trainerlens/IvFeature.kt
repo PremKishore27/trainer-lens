@@ -41,6 +41,7 @@ class IvFeature(private val ctx: Context, private val worker: Executor) {
     private var arc: ArcReader? = null
     @Volatile private var lastSeen = 0L
     private var shown = ""
+    private var lastBars: Iv? = null
     private var lastTokens: List<Token> = emptyList()
     private var lastScreenH = 0
     private var ocrMs = 0L
@@ -77,7 +78,27 @@ class IvFeature(private val ctx: Context, private val worker: Executor) {
                 }
             }
         }
-        AppraisalReader.read(tokens, bmp)?.let { if (tracker.observeBars(it)) { lastSeen = now; changed = true } }
+        // The CP can be unreadable for a while (appraisal dialog, animation). If the HP that *is* visible belongs to a
+        // different Pokémon than the one we're showing, the card is stale: drop it instead of showing the old Pokémon
+        // (and never attach this Pokémon's appraisal to the previous one).
+        val hpNow = if (read == null) SummaryParser.hp(tokens) else read.hp
+        if (read == null && hpNow != null && tracker.hpOnly(hpNow)) changed = true
+        val bars = AppraisalReader.read(tokens, bmp)
+        if (bars != null && tracker.current != null && (read != null || hpNow == tracker.current?.hp)) {
+            if (tracker.observeBars(bars)) { lastSeen = now; changed = true }
+        }
+        if (tracker.current == null && hpNow != null) {
+            lastSeen = now
+            // appraisal visible but no CP yet: the IV % alone is still useful
+            val stableBars = bars != null && bars == lastBars
+            lastBars = bars
+            if (stableBars) {
+                show("${"%.0f".format(bars!!.pct)}%  ${bars.a}/${bars.d}/${bars.s}  ${rating(bars.total)}\n✔ from appraisal\n" +
+                    "CP not readable yet – close the appraisal for level & PvP", GREY, "bars-$bars", emptyList())
+            } else show("Reading this Pokémon… (HP $hpNow, CP not readable yet)", GREY, "reading-$hpNow", emptyList())
+            analysisMs = (System.nanoTime() - t0) / 1_000_000
+            return
+        }
 
         if (now - lastSeen > 5_000) { // no Pokémon page for a while
             tracker.reset(); settled = false
@@ -195,7 +216,7 @@ class IvFeature(private val ctx: Context, private val worker: Executor) {
             val txt = buildString {
                 append("Trainer Lens ${BuildConfig.VERSION_NAME} · IV · screen height $lastScreenH · OCR ${ocrMs} ms · analysis ${analysisMs} ms\n")
                 append("Clues: names=${clues?.names?.map { it.label }} family=${clues?.family?.map { it.name }?.distinct()} types=${clues?.types} " +
-                    "size=${clues?.heightM}m/${clues?.weightKg}kg evolve=${clues?.evolveCost}\n")
+                    "size=${clues?.heightM}m/${clues?.weightKg}kg evolve=${clues?.evolveCost} caught=${clues?.caught?.map { it.name }?.distinct()}\n")
                 tracker.current?.let { append("Pokémon: CP ${it.cp} HP ${it.hp} dust ${it.dust} frames ${it.frames} appraised ${it.appraised}\n") }
                 tracker.result?.let { append("Result: ${it.species.label} others=${it.others.map { o -> o.label }} guessed=${it.guessed} ${it.pctMin}-${it.pctMax}%\n") }
                 append("---\n")

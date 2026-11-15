@@ -9,6 +9,8 @@ object SummaryParser {
     // OCR often confuses digits with look-alike letters, especially when the Pokémon's animation overlaps the CP.
     private const val D = "[0-9OoDQlI|!SsBZzg]"
     private val cpRx = Regex("(?:CP|WP|cp|C\\s?P)\\s*($D{2,5})\\b")
+    // The small "CP" letters are often read as a single "c" / "C" / "©" ("c3259" – seen on a real phone)
+    private val cpShortRx = Regex("^[cC©(]\\s?($D{3,5})$")
     private val hpRx1 = Regex("($D{1,4})\\s*/\\s*($D{1,4})\\s*(?:HP|KP)", RegexOption.IGNORE_CASE)
     private val hpRx2 = Regex("(?:HP|KP)\\s*($D{1,4})\\s*/\\s*($D{1,4})", RegexOption.IGNORE_CASE)
 
@@ -17,13 +19,18 @@ object SummaryParser {
     }.joinToString("").toIntOrNull()
     private val powerUpRx = Regex("power[\\s-]*up", RegexOption.IGNORE_CASE)
 
+    /** Max HP alone ("163 /163 HP") – still readable on the appraisal screen when the CP isn't. */
+    fun hp(tokens: List<Token>): Int? = tokens.firstNotNullOfOrNull {
+        (hpRx1.find(it.text) ?: hpRx2.find(it.text))?.groupValues?.get(2)?.let(::digits)
+    }?.takeIf { it in 10..999 }
+
     fun parse(tokens: List<Token>, screenH: Int): SummaryRead? {
         // CP is printed in the top part of the screen; ignore "CP" text elsewhere (e.g. move lists)
-        val cp = tokens.filter { it.box.centerY() < screenH * 0.35 }
-            .firstNotNullOfOrNull { cpRx.find(it.text)?.groupValues?.get(1)?.let(::digits) }?.takeIf { it in 10..9999 }
-        val hp = tokens.firstNotNullOfOrNull {
-            (hpRx1.find(it.text) ?: hpRx2.find(it.text))?.groupValues?.get(2)?.let(::digits)
-        }?.takeIf { it in 10..999 }
+        val top = tokens.filter { it.box.centerY() < screenH * 0.35 }
+        val cp = (top.firstNotNullOfOrNull { cpRx.find(it.text)?.groupValues?.get(1)?.let(::digits)?.takeIf { v -> v in 10..9999 } }
+            ?: top.filter { it.box.centerY() < screenH * 0.15 }
+                .firstNotNullOfOrNull { cpShortRx.matchEntire(it.text.trim())?.groupValues?.get(1)?.let(::digits)?.takeIf { v -> v in 10..9999 } })
+        val hp = hp(tokens)
         if (cp == null || hp == null) return null
 
         // Stardust cost candidates: plain numbers in the lower half that are a real power-up cost.
