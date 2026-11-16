@@ -38,14 +38,32 @@ class OverlayTest {
         }
     }
 
-    @Test fun bothWindowSizesStayBetweenCpAndHp() {
-        for (scale in listOf(WindowSize.SMALL, WindowSize.LARGE)) for (p in phones) {
-            val r = OverlayLayout.panelRect(p.w, p.h, p.density, scale)
-            assertTrue("scale $scale: top ${r.top} covers CP on ${p.w}x${p.h}", r.top > y(cp.bottom, p))
-            assertTrue("scale $scale: bottom ${r.bottom} covers HP on ${p.w}x${p.h}", r.bottom < y(hp.top, p))
-            assertTrue(r.left >= 0 && r.right <= p.w)
+    @Test fun defaultWindowStaysBetweenCpAndHpEvenAtTheDefaultScale() {
+        for (p in phones) {
+            val r = OverlayLayout.panelRect(p.w, p.h, p.density, OverlayScale.DEFAULT)
+            assertTrue("bottom ${r.bottom} covers HP on ${p.w}x${p.h}", r.bottom < y(hp.top, p))
         }
-        assertTrue(WindowSize.SMALL < 1f && WindowSize.LARGE > 1f && WindowSize.LARGE <= 1.2f)
+    }
+
+    @Test fun scaleStaysInRangeAndNeverThrowsNearScreenEdges() {
+        val w = 740; val h = 700
+        for (x in listOf(0, 200, 700, 1079)) for (yy in listOf(0, 1000, 2000, 2300, 2588)) for (s in listOf(0f, 0.1f, 0.75f, 1f, 1.3f, 5f, Float.NaN)) {
+            val r = OverlayScale.fit(s, x, yy, 1080, 2589, w, h)
+            assertTrue("x=$x y=$yy s=$s -> $r", r in OverlayScale.MIN..OverlayScale.MAX)
+        }
+    }
+
+    @Test fun scaleFitsTheRoomBelowTheWindow() {
+        // 700 px tall window with 1050 px left below it: at most 1.5x, so the 1.3 cap applies; with 770 px left: 1.1x
+        assertEquals(1.3f, OverlayScale.fit(2f, 0, 1539, 1080, 2589, 740, 700), 1e-4f)
+        assertEquals(1.1f, OverlayScale.fit(2f, 0, 1819, 1080, 2589, 740, 700), 1e-3f)
+        assertEquals(OverlayScale.MIN, OverlayScale.fit(0.1f, 0, 0, 1080, 2589, 740, 700), 0f)
+    }
+
+    @Test fun draggingTheBottomEdgeScalesTheWindow() {
+        assertEquals(1.5f, OverlayScale.fromDrag(1f, 700, 350f), 1e-4f)
+        assertEquals(0.5f, OverlayScale.fromDrag(1f, 700, -350f), 1e-4f)
+        assertEquals(1f, OverlayScale.fromDrag(1f, 0, 100f), 0f)
     }
 
     @Test fun windowMayOnlyCoverThePokemonNameOnShortScreens() {

@@ -14,7 +14,8 @@ object Metrics {
     const val GAP = 6
     const val CONTENT_PAD = 10
     const val CONTENT_H = 196
-    const val PANEL_H = WINDOW_PAD + TOP_BAR + GAP + CONTENT_H + WINDOW_PAD
+    const val GRIP = 26      // the resize strip along the bottom edge
+    const val PANEL_H = WINDOW_PAD + TOP_BAR + GAP + CONTENT_H + GRIP
     const val INNER_H = CONTENT_H - 2 * CONTENT_PAD
 
     // IV card, top to bottom
@@ -45,10 +46,27 @@ object Metrics {
     const val BAG_LIST = INNER_H - BAG_FIXED
 }
 
-/** The two window sizes the size button switches between (the layout is designed at 1.0). */
-object WindowSize {
-    const val SMALL = 0.8f
-    const val LARGE = 1.1f
+/**
+ * How big the window is drawn, as a factor of its design size (width follows height). The player drags the bottom edge
+ * to change it; these functions keep the result inside sensible limits and on screen.
+ */
+object OverlayScale {
+    const val MIN = 0.75f
+    const val MAX = 1.3f
+    const val DEFAULT = 1f
+
+    /** [s] limited to [MIN]..[MAX] and to the space right of / below the window's corner at ([x], [y]). Never throws. */
+    fun fit(s: Float, x: Int, y: Int, screenW: Int, screenH: Int, panelWpx: Int, panelHpx: Int): Float {
+        if (s.isNaN()) return DEFAULT
+        val room = if (panelWpx > 0 && panelHpx > 0)
+            minOf((screenW - x).toFloat() / panelWpx, (screenH - y).toFloat() / panelHpx) else MAX
+        val hi = maxOf(MIN, minOf(MAX, room))   // hi >= MIN, so coerceIn below can't fail near a screen edge
+        return s.coerceIn(MIN, hi)
+    }
+
+    /** The scale after dragging the bottom edge [dy] pixels, starting from [startScale] at a window height of [startHpx]. */
+    fun fromDrag(startScale: Float, startHpx: Int, dy: Float): Float =
+        if (startHpx <= 0) startScale else startScale * (startHpx + dy) / startHpx
 }
 
 object OverlayLayout {

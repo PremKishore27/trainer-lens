@@ -8,7 +8,7 @@ Trainer Lens isn't on the Play Store, so Android adds a few extra safety prompts
    it opens Trainer Lens's **App info** page → tap **⋮ (three dots, top right)** → **Allow restricted settings** → confirm.
    Without it, *Display over other apps* (step 3) stays greyed out. *(Settings → Apps → Trainer Lens → ⋮ → Allow restricted settings.)*
 4. Step 5 **▶ Start session** asks to record the screen – choose **Entire screen**.
-5. Switch to Pokémon GO. **Drag the 🔍 bubble** anywhere; tap it to open the window with the **IV** and **Bag** tabs. The **A− / A+** button makes the window smaller or larger.
+5. Switch to Pokémon GO. **Drag the 🔍 bubble** anywhere; tap it to open the window with the **IV** and **Bag** tabs. **Drag the bottom edge** of the window to resize it.
 6. **Not sure where to go?** The window tells you: on the IV tab open a Pokémon from your list; on the Bag tab open Items (Poké Ball → Items).
 
 **Updating:** install the new APK over the old one – your settings and permissions stay.
