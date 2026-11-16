@@ -5,6 +5,7 @@
 [![Downloads](https://img.shields.io/github/downloads/PremKishore27/trainer-lens/total?color=blue)](https://github.com/PremKishore27/trainer-lens/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 ![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)
+[![License: MIT](https://img.shields.io/github/license/PremKishore27/trainer-lens?color=blue)](LICENSE)
 ![Kotlin](https://img.shields.io/badge/Kotlin-1.9-7F52FF?logo=kotlin&logoColor=white)
 
 **A screen-reading helper overlay for Pokémon GO on Android.**
@@ -215,6 +216,10 @@ Every push builds an APK on GitHub Actions; pushes to `main` publish a new [Rele
 - [ ] Stickers & more languages
 
 ---
+
+## License
+
+[MIT](LICENSE) – free to use, copy and modify. The Pokémon names, data and trademarks belong to their owners (see the note below).
 
 ## Contributing
 
