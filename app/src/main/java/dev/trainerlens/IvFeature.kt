@@ -100,7 +100,7 @@ class IvFeature(private val ctx: Context, private val worker: Executor) {
         }
 
         if (noHpFrames >= 3) {
-            lastSeen = now; settled = false; hintShown = true
+            lastSeen = now; settled = true; hintShown = true // nothing will change until the window moves: scan calmly
             show(CardModels.message("Can't read the HP line",
                 "This window is covering the Pokémon's name, HP or type lines.\nDrag it up or down, or hide it with –."))
             analysisMs = (System.nanoTime() - t0) / 1_000_000

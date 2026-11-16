@@ -111,7 +111,7 @@ class CaptureService : Service() {
                 else -> 500L                                                       // no Pokémon page on screen: don't burn battery
             }
             ivActive() -> 500L
-            ::bag.isInitialized && bag.recentlySeen(SystemClock.elapsedRealtime()) -> 300L // scrolling the Items list: don't miss rows
+            ::bag.isInitialized && bag.recentlySeen(SystemClock.elapsedRealtime()) -> 400L // scrolling the Items list: don't miss rows
             else -> 1000L
         }
         main.postDelayed(scanTask, delay)
@@ -128,11 +128,16 @@ class CaptureService : Service() {
         try {
             val p = img.planes[0]
             val pad = (p.rowStride - p.pixelStride * img.width) / p.pixelStride
-            val full = Bitmap.createBitmap(img.width + pad, img.height, Bitmap.Config.ARGB_8888)
-            full.copyPixelsFromBuffer(p.buffer)
-            bmp = if (pad == 0) full else Bitmap.createBitmap(img.width, img.height, Bitmap.Config.ARGB_8888).also {
-                Canvas(it).drawBitmap(full, 0f, 0f, null) // a copy we can paint on; the cropped view of `full` may be immutable
-                full.recycle()
+            // Two bitmaps are reused for every frame (one scan runs at a time), instead of allocating ~22 MB per scan.
+            val rw = img.width + pad
+            val raw = rawBmp?.takeIf { it.width == rw && it.height == img.height }
+                ?: Bitmap.createBitmap(rw, img.height, Bitmap.Config.ARGB_8888).also { rawBmp?.recycle(); rawBmp = it }
+            raw.copyPixelsFromBuffer(p.buffer)
+            bmp = if (pad == 0) raw else {
+                val f = frameBmp?.takeIf { it.width == img.width && it.height == img.height }
+                    ?: Bitmap.createBitmap(img.width, img.height, Bitmap.Config.ARGB_8888).also { frameBmp?.recycle(); frameBmp = it }
+                Canvas(f).drawBitmap(raw, 0f, 0f, copyPaint) // a copy we can paint on, without the padding columns
+                f
             }
         } finally { img.close() }
         try { maskOverlay(bmp) } catch (e: Exception) { Diag.line = "mask failed: $e" }
@@ -156,7 +161,7 @@ class CaptureService : Service() {
             .addOnFailureListener { frameDone(bmp) }
     }
 
-    private fun frameDone(bmp: Bitmap) { bmp.recycle(); scheduleNext() }
+    private fun frameDone(@Suppress("UNUSED_PARAMETER") bmp: Bitmap) { scheduleNext() } // the bitmaps are reused, not recycled
 
     private enum class Tab { BAG, IV }
     private var tab: Tab? = null
@@ -173,6 +178,9 @@ class CaptureService : Service() {
     private var panelW = 0
     private var bubbleSize = 0
     private val maskPaint = Paint().apply { color = Color.BLACK }
+    private val copyPaint = Paint().apply { xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC) }
+    private var rawBmp: Bitmap? = null
+    private var frameBmp: Bitmap? = null
 
     /**
      * One floating window with two states, both of fixed size: a 🔍 bubble, or a frosted-glass panel with an IV / Bag
@@ -335,6 +343,7 @@ class CaptureService : Service() {
         worker.shutdown()
         menuRoot?.let { runCatching { wm.removeView(it) } }
         display?.release()
+        rawBmp?.recycle(); frameBmp?.recycle(); rawBmp = null; frameBmp = null
         if (::projection.isInitialized) projection.stop()
         super.onDestroy()
     }
