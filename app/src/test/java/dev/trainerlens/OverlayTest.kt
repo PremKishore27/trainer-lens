@@ -46,23 +46,30 @@ class OverlayTest {
     }
 
     /** The real log: window at 1.3x, top 414, bottom 1288 on a 2780 px display, covering the HP line at about y 1277. */
-    @Test fun theIvWindowIsKeptInsideTheBandAboveTheHpLine() {
-        val realH = 2780; val panelH = 673
-        val h = (panelH * OverlayScale.MAX).toInt()
-        val top = OverlayBand.clampY(414, h, realH)
-        assertTrue("bottom ${top + h} reaches the HP line", top + h <= OverlayBand.bottom(realH) && top + h < 1277)
-        assertTrue(top >= OverlayBand.top(realH))
-        // and for every phone, at every size the player can pick (after the scale is limited to the band)
+    @Test fun theIvWindowSnapsAwayFromTheHpLine() {
+        val realH = 2780; val h = (673 * OverlayScale.MAX).toInt()
+        val fixed = OverlayBand.snapY(414, h, realH)
+        assertTrue("bottom ${fixed + h} reaches the HP line", fixed + h <= OverlayBand.aboveEnd(realH) && fixed + h < 1277)
+        assertTrue(OverlayBand.snapY(2000, h, realH) >= OverlayBand.belowStart(realH))   // the lower half is reachable
+        assertEquals(1500, OverlayBand.snapY(1500, h, realH))                             // free movement below the HP line
+        // however it is dragged, on every phone and size: never across the CP line or the HP strip
         for (p in phones) {
             val panelHpx = (Metrics.PANEL_H * p.density + 0.5f).toInt()
-            for (s in listOf(OverlayScale.MIN, 1f, OverlayScale.MAX)) {
-                val fitted = OverlayScale.fit(s, 0, 0, p.w, p.h, 100, panelHpx, OverlayBand.maxScale(panelHpx, p.h))
-                val hh = (panelHpx * fitted).toInt()
-                val yy = OverlayBand.clampY(p.h, hh, p.h)
-                assertTrue("${p.w}x${p.h} scale $s: bottom ${yy + hh}", yy + hh <= OverlayBand.bottom(p.h))
-                assertTrue("window must stay below the CP line", yy > y(cp.bottom, p))
+            for (sc in listOf(OverlayScale.MIN, 1f, OverlayScale.MAX)) {
+                val hh = (panelHpx * sc).toInt()
+                assertTrue("${p.w}x${p.h} scale $sc has nowhere to sit", OverlayBand.ranges(hh, p.h).isNotEmpty())
+                for (drag in 0..p.h step 20) {
+                    val at = OverlayBand.snapY(drag, hh, p.h)
+                    assertTrue("${p.w}x${p.h} scale $sc: y=$at", at + hh <= OverlayBand.aboveEnd(p.h) || at >= OverlayBand.belowStart(p.h))
+                    assertTrue(at > y(cp.bottom, p) && at + hh <= p.h)
+                }
             }
         }
+    }
+
+    @Test fun growingStopsAtTheEdgeOfTheZone() {
+        assertEquals(1.3f, OverlayBand.maxScaleAt(348, 673, 2780), 0.01f)    // above the HP line: down to 44 %
+        assertTrue(OverlayBand.maxScaleAt(1500, 673, 2780) > 1.8f)           // below it: down to the screen's end
     }
 
     @Test fun scaleStaysInRangeAndNeverThrowsNearScreenEdges() {

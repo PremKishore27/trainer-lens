@@ -198,7 +198,7 @@ class CaptureService : Service() {
         bagPos[1] = (m.heightPixels - win.panelHeightPx - Ui.dp(this, 110)).coerceAtLeast(r0.top)
         val saved = runCatching { getSharedPreferences("lens", MODE_PRIVATE).getFloat("scale", OverlayScale.DEFAULT) }.getOrDefault(OverlayScale.DEFAULT)
         scale = fitScale(saved)
-        ivPos[1] = OverlayBand.clampY(ivPos[1], (win.panelHeightPx * scale).toInt(), realDisplaySize().second)
+        ivPos[1] = OverlayBand.snapY(ivPos[1], (win.panelHeightPx * scale).toInt(), realDisplaySize().second)
 
         lp = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
@@ -241,7 +241,7 @@ class CaptureService : Service() {
         val m = resources.displayMetrics
         val realH = realDisplaySize().second
         // on the IV tab the window must also fit the band between the CP and HP lines
-        val band = if (tab == Tab.BAG) OverlayScale.MAX else OverlayBand.maxScale(win.panelHeightPx, realH)
+        val band = if (tab == Tab.BAG) OverlayScale.MAX else OverlayBand.maxScaleAt(panelPos()[1], win.panelHeightPx, realH)
         return OverlayScale.fit(s, panelPos()[0], panelPos()[1], m.widthPixels, realH, win.panelWidthPx, win.panelHeightPx, band)
     }
 
@@ -282,7 +282,7 @@ class CaptureService : Service() {
         pos[0] = pos[0].coerceIn(0, maxOf(0, m.widthPixels - b.width))
         pos[1] = pos[1].coerceIn(0, maxOf(0, realH - b.height))
         // the IV window stays in the free band, so it never hides the HP line the checker has to read
-        if (pos === ivPos && panelOpen) pos[1] = OverlayBand.clampY(pos[1], b.height, realH)
+        if (pos === ivPos && panelOpen) pos[1] = OverlayBand.snapY(pos[1], b.height, realH)
         lp.x = pos[0]; lp.y = pos[1]
         runCatching { wm.updateViewLayout(b, lp) }
     }

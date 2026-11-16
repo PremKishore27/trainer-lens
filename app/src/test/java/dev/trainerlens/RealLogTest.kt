@@ -79,6 +79,13 @@ class RealLogTest {
         assertEquals(3493, SummaryParser.cp(appraisalCovered, 2589)); assertEquals(null, SummaryParser.hp(appraisalCovered))
     }
 
+    /** "DRAGON / GROUNE": the last letter of GROUND was cut off by the page, and the whole type clue was lost. */
+    @Test fun aCutOffTypeWordStillCounts() {
+        assertEquals(setOf("dragon", "ground"), SpeciesDb.typesOnScreen(appraisalCovered, 2589))
+        assertEquals(setOf("dragon", "flying"), SpeciesDb.typesOnScreen(listOf(Token("DRAGON / FLY", Box(515, 1498, 761, 1523))), 2589))
+        assertEquals(emptySet<String>(), SpeciesDb.typesOnScreen(listOf(Token("Weight Height", Box(515, 1498, 761, 1523))), 2589))
+    }
+
     @Test fun aPokemonListIsNotAPokemonPage() {
         val list = listOf(Token("CP 1234", Box(100, 300, 300, 340)), Token("CP 987", Box(500, 300, 700, 340)), Token("Pidgey", Box(100, 500, 300, 540)))
         assertFalse(SummaryParser.looksLikePokemonPage(list))

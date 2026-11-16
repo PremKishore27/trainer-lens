@@ -351,13 +351,17 @@ object SpeciesDb {
         for (t in tokens) {
             if (screenH > 0 && t.box.centerY() >= limit) continue
             // "DRAGON / FLY": a type word cut off at the edge still counts if it's the start of exactly one type
-            val words = t.text.lowercase().split(Regex("[^a-z]+")).filter { it.isNotEmpty() }.map { w ->
-                if (w in TYPES) w else TYPES.filter { w.length >= 3 && it.startsWith(w) }.singleOrNull()
-            }
+            val words = t.text.lowercase().split(Regex("[^a-z]+")).filter { it.isNotEmpty() }.map { typeWord(it) }
             if (words.isNotEmpty() && words.size <= 2 && words.all { it != null }) out += words.filterNotNull()
         }
         return if (out.size <= 2) out else emptySet()
     }
+
+    /** A type name, a cut-off start of one ("FLY"), or – for words of 5+ letters – one letter off ("GROUNE"); else null. */
+    private fun typeWord(w: String): String? =
+        if (w in TYPES) w
+        else TYPES.filter { w.length >= 3 && it.startsWith(w) }.singleOrNull()
+            ?: if (w.length >= 5) TYPES.filter { abs(it.length - w.length) <= 1 && lev(it, w) == 1 }.singleOrNull() else null
 
     // ---------------------------------------------------------------------------------------------------------
     // Turning clues into candidates

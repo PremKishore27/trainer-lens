@@ -16,6 +16,8 @@ Newest first. The latest build is always on the [Releases](https://github.com/Pr
 - Community files: contributing guide, code of conduct, security policy, issue and pull request templates.
 
 ### Changed
+- **IV window placement:** on the IV tab the window can sit above the HP line or below it and snaps away from the strip in between (so it never hides the CP or HP lines); it can no longer get stuck in the top half.
+- **Types** read with one letter cut off ("DRAGON / GROUNE") now count, which helps identify renamed Pokémon.
 - **Bag:** scans about 5 times a second while the Items list is on screen (it was about 2), shows the over-limit list even when the bag size can't be read, and the Bag tab has its own window position near the bottom, so the top of the Items screen stays readable. Each tab remembers where you put its window.
 - **Copy log** now includes the last frames the app read and the last error, to find problems like "IV only works for the first Pokémon". An error now shows on the card instead of failing silently.
 

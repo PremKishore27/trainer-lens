@@ -74,24 +74,38 @@ object OverlayScale {
 
 /**
  * The IV checker has to read the CP line (about 5-9 % of the screen height) and the HP line (about 46-48 %). The window
- * is part of the screen capture and is blacked out before reading, so on the IV tab it must stay in the free band
- * between them. (A real log showed a window at its largest size covering the HP line: nothing could be read.)
+ * is part of the screen capture and is blacked out before reading, so on the IV tab it must not cover them. It can sit
+ * in the free band ABOVE the HP line ([TOP]..[ABOVE_END]) or in the area BELOW it ([BELOW_START]..end of screen), and it
+ * snaps away from the strip in between. (A real log showed a window covering the HP line: nothing could be read.)
  */
 object OverlayBand {
-    const val TOP = 0.10f
-    const val BOTTOM = 0.44f
+    const val TOP = 0.10f          // below the CP line
+    const val ABOVE_END = 0.44f    // above the HP line
+    const val BELOW_START = 0.50f  // below the HP line
 
     fun top(realH: Int) = (realH * TOP).toInt()
-    fun bottom(realH: Int) = (realH * BOTTOM).toInt()
+    fun aboveEnd(realH: Int) = (realH * ABOVE_END).toInt()
+    fun belowStart(realH: Int) = (realH * BELOW_START).toInt()
 
-    /** [y] moved so that a window [h] pixels tall lies inside the band (at the band's top if it is taller than the band). */
-    fun clampY(y: Int, h: Int, realH: Int): Int {
-        val lo = top(realH); val hi = bottom(realH) - h
-        return if (hi < lo) lo else y.coerceIn(lo, hi)
+    /** The vertical positions [y] a window [h] pixels tall may have: above the HP line and / or below it. */
+    fun ranges(h: Int, realH: Int): List<IntRange> = listOfNotNull(
+        (top(realH)..(aboveEnd(realH) - h)).takeIf { !it.isEmpty() },
+        (belowStart(realH)..(realH - h)).takeIf { !it.isEmpty() },
+    )
+
+    /** [y] moved to the nearest allowed position. With no room anywhere it is just kept on screen. */
+    fun snapY(y: Int, h: Int, realH: Int): Int {
+        val rs = ranges(h, realH)
+        if (rs.isEmpty()) return y.coerceIn(0, maxOf(0, realH - h))
+        return rs.map { y.coerceIn(it.first, it.last) }.minByOrNull { kotlin.math.abs(it - y) }!!
     }
 
-    /** The biggest scale at which a window of [panelHpx] still fits the band. */
-    fun maxScale(panelHpx: Int, realH: Int): Float = if (panelHpx <= 0) OverlayScale.MAX else (bottom(realH) - top(realH)).toFloat() / panelHpx
+    /** The biggest scale at which the window, growing down from [y], stays inside the zone it is in. */
+    fun maxScaleAt(y: Int, panelHpx: Int, realH: Int): Float {
+        if (panelHpx <= 0) return OverlayScale.MAX
+        val limit = if (y < belowStart(realH)) aboveEnd(realH) else realH
+        return (limit - y).toFloat() / panelHpx
+    }
 }
 
 object OverlayLayout {
