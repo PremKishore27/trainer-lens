@@ -45,6 +45,26 @@ class OverlayTest {
         }
     }
 
+    /** The real log: window at 1.3x, top 414, bottom 1288 on a 2780 px display, covering the HP line at about y 1277. */
+    @Test fun theIvWindowIsKeptInsideTheBandAboveTheHpLine() {
+        val realH = 2780; val panelH = 673
+        val h = (panelH * OverlayScale.MAX).toInt()
+        val y = OverlayBand.clampY(414, h, realH)
+        assertTrue("bottom ${y + h} reaches the HP line", y + h <= OverlayBand.bottom(realH) && y + h < 1277)
+        assertTrue(y >= OverlayBand.top(realH))
+        // and for every phone, at every size the player can pick (after the scale is limited to the band)
+        for (p in phones) {
+            val panelHpx = (Metrics.PANEL_H * p.density + 0.5f).toInt()
+            for (s in listOf(OverlayScale.MIN, 1f, OverlayScale.MAX)) {
+                val fitted = OverlayScale.fit(s, 0, 0, p.w, p.h, 100, panelHpx, OverlayBand.maxScale(panelHpx, p.h))
+                val hh = (panelHpx * fitted).toInt()
+                val yy = OverlayBand.clampY(p.h, hh, p.h)
+                assertTrue("${p.w}x${p.h} scale $s: bottom ${yy + hh}", yy + hh <= OverlayBand.bottom(p.h))
+                assertTrue("window must stay below the CP line", yy > y(cp.bottom, p))
+            }
+        }
+    }
+
     @Test fun scaleStaysInRangeAndNeverThrowsNearScreenEdges() {
         val w = 740; val h = 700
         for (x in listOf(0, 200, 700, 1079)) for (yy in listOf(0, 1000, 2000, 2300, 2588)) for (s in listOf(0f, 0.1f, 0.75f, 1f, 1.3f, 5f, Float.NaN)) {

@@ -35,6 +35,15 @@ object SummaryParser {
     /** A POWER UP button is on screen: this is a Pokémon page (the list and map screens don't have one). */
     fun hasPowerUp(tokens: List<Token>): Boolean = tokens.any { powerUpRx.containsMatchIn(it.text) }
 
+    private val pageWordRx = Regex("^(?:weight|height|dust|stardust|gewicht|größe|sternenstaub)$", RegexOption.IGNORE_CASE)
+
+    /**
+     * This is a Pokémon page, with or without the POWER UP button (the appraisal screen hides it): the page's
+     * WEIGHT / HEIGHT / DUST labels or a POWER UP button are on screen. The Pokémon list shows CP numbers too, but no such labels.
+     */
+    fun looksLikePokemonPage(tokens: List<Token>): Boolean =
+        hasPowerUp(tokens) || tokens.any { pageWordRx.matches(it.text.trim()) }
+
     fun parse(tokens: List<Token>, screenH: Int): SummaryRead? {
         val cp = cp(tokens, screenH)
         val hp = hp(tokens)

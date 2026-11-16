@@ -55,18 +55,43 @@ object OverlayScale {
     const val MAX = 1.3f
     const val DEFAULT = 1f
 
-    /** [s] limited to [MIN]..[MAX] and to the space right of / below the window's corner at ([x], [y]). Never throws. */
-    fun fit(s: Float, x: Int, y: Int, screenW: Int, screenH: Int, panelWpx: Int, panelHpx: Int): Float {
+    /**
+     * [s] limited to [MIN]..[MAX], to the space right of / below the window's corner at ([x], [y]) and to [maxScale]
+     * (the IV tab's band, see [OverlayBand]). Never throws.
+     */
+    fun fit(s: Float, x: Int, y: Int, screenW: Int, screenH: Int, panelWpx: Int, panelHpx: Int, maxScale: Float = MAX): Float {
         if (s.isNaN()) return DEFAULT
         val room = if (panelWpx > 0 && panelHpx > 0)
             minOf((screenW - x).toFloat() / panelWpx, (screenH - y).toFloat() / panelHpx) else MAX
-        val hi = maxOf(MIN, minOf(MAX, room))   // hi >= MIN, so coerceIn below can't fail near a screen edge
+        val hi = maxOf(MIN, minOf(MAX, room, maxScale))   // hi >= MIN, so coerceIn below can't fail near a screen edge
         return s.coerceIn(MIN, hi)
     }
 
     /** The scale after dragging the bottom edge [dy] pixels, starting from [startScale] at a window height of [startHpx]. */
     fun fromDrag(startScale: Float, startHpx: Int, dy: Float): Float =
         if (startHpx <= 0) startScale else startScale * (startHpx + dy) / startHpx
+}
+
+/**
+ * The IV checker has to read the CP line (about 5-9 % of the screen height) and the HP line (about 46-48 %). The window
+ * is part of the screen capture and is blacked out before reading, so on the IV tab it must stay in the free band
+ * between them. (A real log showed a window at its largest size covering the HP line: nothing could be read.)
+ */
+object OverlayBand {
+    const val TOP = 0.10f
+    const val BOTTOM = 0.44f
+
+    fun top(realH: Int) = (realH * TOP).toInt()
+    fun bottom(realH: Int) = (realH * BOTTOM).toInt()
+
+    /** [y] moved so that a window [h] pixels tall lies inside the band (at the band's top if it is taller than the band). */
+    fun clampY(y: Int, h: Int, realH: Int): Int {
+        val lo = top(realH); val hi = bottom(realH) - h
+        return if (hi < lo) lo else y.coerceIn(lo, hi)
+    }
+
+    /** The biggest scale at which a window of [panelHpx] still fits the band. */
+    fun maxScale(panelHpx: Int, realH: Int): Float = if (panelHpx <= 0) OverlayScale.MAX else (bottom(realH) - top(realH)).toFloat() / panelHpx
 }
 
 object OverlayLayout {

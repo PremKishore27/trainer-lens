@@ -198,6 +198,7 @@ class CaptureService : Service() {
         bagPos[1] = (m.heightPixels - win.panelHeightPx - Ui.dp(this, 110)).coerceAtLeast(r0.top)
         val saved = runCatching { getSharedPreferences("lens", MODE_PRIVATE).getFloat("scale", OverlayScale.DEFAULT) }.getOrDefault(OverlayScale.DEFAULT)
         scale = fitScale(saved)
+        ivPos[1] = OverlayBand.clampY(ivPos[1], (win.panelHeightPx * scale).toInt(), realDisplaySize().second)
 
         lp = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
@@ -217,6 +218,7 @@ class CaptureService : Service() {
         tab = t
         win.showTab(if (t == Tab.BAG) bag.panel else iv.panel, t == Tab.BAG)
         if (panelOpen) { // move to this tab's own spot
+            scale = fitScale(scale); applySize()
             val pos = panelPos()
             lp.x = pos[0]; lp.y = pos[1]
             menuRoot?.let { b -> runCatching { wm.updateViewLayout(b, lp) }; b.post { place(pos) } }
@@ -237,7 +239,10 @@ class CaptureService : Service() {
     /** [s] limited to the allowed range and to the room left on screen below / right of the window's corner. */
     private fun fitScale(s: Float): Float {
         val m = resources.displayMetrics
-        return OverlayScale.fit(s, panelPos()[0], panelPos()[1], m.widthPixels, m.heightPixels, win.panelWidthPx, win.panelHeightPx)
+        val realH = realDisplaySize().second
+        // on the IV tab the window must also fit the band between the CP and HP lines
+        val band = if (tab == Tab.BAG) OverlayScale.MAX else OverlayBand.maxScale(win.panelHeightPx, realH)
+        return OverlayScale.fit(s, panelPos()[0], panelPos()[1], m.widthPixels, realH, win.panelWidthPx, win.panelHeightPx, band)
     }
 
     /** The window is given exactly the footprint of what is drawn, so touches, the clamp and the mask match it. */
@@ -273,8 +278,11 @@ class CaptureService : Service() {
     private fun place(pos: IntArray) {
         val b = menuRoot ?: return
         val m = resources.displayMetrics
+        val realH = realDisplaySize().second
         pos[0] = pos[0].coerceIn(0, maxOf(0, m.widthPixels - b.width))
-        pos[1] = pos[1].coerceIn(0, maxOf(0, m.heightPixels - b.height))
+        pos[1] = pos[1].coerceIn(0, maxOf(0, realH - b.height))
+        // the IV window stays in the free band, so it never hides the HP line the checker has to read
+        if (pos === ivPos && panelOpen) pos[1] = OverlayBand.clampY(pos[1], b.height, realH)
         lp.x = pos[0]; lp.y = pos[1]
         runCatching { wm.updateViewLayout(b, lp) }
     }

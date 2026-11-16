@@ -124,6 +124,19 @@ object CardModels {
     }
 }
 
+/**
+ * Counts frames that show a Pokémon page and its CP but no HP: the window is probably covering the HP line.
+ * A frame without a readable CP says nothing (the number flickers), so it neither counts nor resets.
+ */
+class CoverTracker(private val needed: Int = 3) {
+    var count = 0; private set
+    fun update(cp: Int?, hp: Int?): Boolean {
+        if (hp != null) count = 0 else if (cp != null) count++
+        return count >= needed
+    }
+    fun reset() { count = 0 }
+}
+
 /** What the Bag tab says about where the player is. */
 enum class BagHint { NONE, GO_TO_BAG, NOT_ON_ITEMS }
 

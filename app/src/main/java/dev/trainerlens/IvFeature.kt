@@ -39,7 +39,8 @@ class IvFeature(private val ctx: Context, private val worker: Executor) {
     private var lastScreenH = 0
     private var ocrMs = 0L
     private var analysisMs = 0L
-    private var noHpFrames = 0
+    private val cover = CoverTracker()
+    private val noHpFrames get() = cover.count
     private var hintShown = false
 
     /** A Pokémon page was read within the last 3 s – worth scanning fast. Otherwise (map, other screens) scan slowly. */
@@ -61,7 +62,7 @@ class IvFeature(private val ctx: Context, private val worker: Executor) {
         // The checks keep this away from an appraisal, which has HP but no CP.
         if (read == null && onItemsScreen && SummaryParser.hp(tokens) == null && !SummaryParser.hasPowerUp(tokens) &&
             SummaryParser.cp(tokens, screenH) == null) {
-            tracker.reset(); settled = false; noHpFrames = 0
+            tracker.reset(); settled = false; cover.reset()
             show(CardModels.idle(onItems = true))
             return
         }
@@ -99,8 +100,10 @@ class IvFeature(private val ctx: Context, private val worker: Executor) {
             if (caught.isNotEmpty() && tracker.observeCaught(hpNow, Clues(caught = caught))) changed = true
         }
         if (read == null && hpNow != null && tracker.hpOnly(hpNow)) changed = true
-        // A Pokémon page whose CP is readable but whose HP line isn't: the window is probably covering it.
-        noHpFrames = if (read == null && hpNow == null && SummaryParser.hasPowerUp(tokens) && SummaryParser.cp(tokens, screenH) != null) noHpFrames + 1 else 0
+        // A Pokémon page (also the appraisal screen, which has no POWER UP button) whose CP is readable but whose HP line
+        // isn't: the window is probably covering it.
+        val covered = if (SummaryParser.looksLikePokemonPage(tokens)) cover.update(SummaryParser.cp(tokens, screenH), hpNow)
+        else { cover.reset(); false }
         val bars = AppraisalReader.read(tokens, bmp)
         if (bars != null && tracker.current != null && (read != null || hpNow == tracker.current?.hp)) {
             if (tracker.observeBars(bars)) { lastSeen = now; changed = true }
@@ -119,7 +122,7 @@ class IvFeature(private val ctx: Context, private val worker: Executor) {
             return
         }
 
-        if (noHpFrames >= 3) {
+        if (covered) {
             lastSeen = now; settled = true; hintShown = true // nothing will change until the window moves: scan calmly
             show(CardModels.message("Can't read the HP line",
                 "This window covers the Pokémon's name,\nHP or type lines. Move it, drag its\nbottom edge to shrink it, or tap –."))
