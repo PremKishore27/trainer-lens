@@ -113,4 +113,9 @@ object OverlayMask {
 /** Last overlay / capture geometry, copied into the "Copy log" text so a bad read can be diagnosed. */
 object Diag {
     @Volatile var line: String = ""
+    /** The last exception that was swallowed so the scan loop could carry on. */
+    @Volatile var error: String? = null
+    private val frames = java.util.ArrayDeque<String>()
+    @Synchronized fun frame(s: String) { if (frames.size >= 12) frames.removeFirst(); frames.addLast(s) }
+    @Synchronized fun recent(): String = frames.joinToString("\n")
 }

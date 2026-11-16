@@ -47,6 +47,23 @@ class WindowSmokeTest {
         assertEquals(View.VISIBLE, w.bubble.visibility); assertEquals(View.GONE, w.panel.visibility)
     }
 
+    private fun texts(v: View, out: MutableList<String> = ArrayList()): List<String> {
+        if (v is TextView) out += v.text.toString()
+        if (v is android.view.ViewGroup) for (i in 0 until v.childCount) texts(v.getChildAt(i), out)
+        return out
+    }
+
+    /** The bag's over-limit list must not wait for the bag size ("342 / 350"), which the OCR may not find. */
+    @Test fun bagShowsOverLimitItemsEvenWithoutTheBagSize() {
+        val bag = BagFeature(ctx)
+        val items = listOf(Token("Poke Ball x84", Box(100, 600, 700, 680)), Token("Potion x40", Box(100, 800, 700, 880)))
+        bag.onTokens(items, 2400); bag.onTokens(items, 2400)
+        val all = texts(bag.panel).joinToString(" | ")
+        assertTrue(all, all.contains("Bag size not read"))
+        assertTrue(all, all.contains("Over keep limit") && all.contains("Poke Ball"))
+        assertTrue(!all.contains("Reading your bag"))
+    }
+
     @Test fun setupScreenLaunches() {
         val a = Robolectric.buildActivity(MainActivity::class.java).setup().get()
         for (id in listOf(R.id.start, R.id.step1, R.id.step2, R.id.step3, R.id.step4, R.id.badge1, R.id.howto, R.id.note, R.id.version, R.id.linkGithub, R.id.linkIssue))

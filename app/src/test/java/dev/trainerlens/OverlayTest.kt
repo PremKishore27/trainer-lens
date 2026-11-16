@@ -106,6 +106,12 @@ class OverlayTest {
         assertEquals(Box(90, 290, 510, 910), OverlayMask.map(Box(100, 300, 500, 900), 0, 0, 1080, 2400, 10))
     }
 
+    @Test fun theFrameTrailKeepsOnlyTheNewestFrames() {
+        repeat(30) { Diag.frame("frame $it") }
+        val lines = Diag.recent().lines()
+        assertEquals(12, lines.size); assertEquals("frame 29", lines.last())
+    }
+
     @Test fun cpIsReadableWithoutHp() {
         val tokens = listOf(Token("CP 3259", cp), Token("POWER UP", Box(300, 2000, 500, 2044)))
         assertEquals(3259, SummaryParser.cp(tokens, H))

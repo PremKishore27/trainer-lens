@@ -111,7 +111,8 @@ class CaptureService : Service() {
                 else -> 500L                                                       // no Pokémon page on screen: don't burn battery
             }
             ivActive() -> 500L
-            ::bag.isInitialized && bag.recentlySeen(SystemClock.elapsedRealtime()) -> 400L // scrolling the Items list: don't miss rows
+            panelOpen && tab == Tab.BAG && !(::bag.isInitialized && bag.recentlySeen(SystemClock.elapsedRealtime())) -> 400L // waiting for the Items screen
+            ::bag.isInitialized && bag.recentlySeen(SystemClock.elapsedRealtime()) -> 60L  // scrolling the Items list: as fast as text recognition allows
             else -> 1000L
         }
         main.postDelayed(scanTask, delay)
@@ -154,7 +155,7 @@ class CaptureService : Service() {
                     iv.onItemsScreen = bag.recentlySeen(SystemClock.elapsedRealtime())
                     worker.execute {
                         try { iv.onFrame(tokens, bmp, screenH, SystemClock.elapsedRealtime(), ocrMs) }
-                        catch (e: Exception) { /* a bad frame must never stop the scan loop */ }
+                        catch (e: Exception) { iv.reportError(e) } // a bad frame must never stop the scan loop, but it must not hide either
                         finally { main.post { frameDone(bmp) } }
                     }
                 } else frameDone(bmp)
@@ -170,7 +171,9 @@ class CaptureService : Service() {
     private lateinit var lp: WindowManager.LayoutParams
     private lateinit var win: OverlayWindow
     private val bubblePos = IntArray(2)
-    private val panelPos = IntArray(2)
+    private val ivPos = IntArray(2)   // the IV tab needs the band between the CP and HP lines
+    private val bagPos = IntArray(2)  // the Bag tab sits low, so the top of the Items screen (bag size) stays readable
+    private fun panelPos() = if (tab == Tab.BAG) bagPos else ivPos
     private var scale = OverlayScale.DEFAULT
     private val maskPaint = Paint().apply { color = Color.BLACK }
     private val copyPaint = Paint().apply { xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC) }
@@ -190,7 +193,9 @@ class CaptureService : Service() {
         win = OverlayWindow(this, panelW, bubbleSize, { select(Tab.IV) }, { select(Tab.BAG) }, { setExpanded(false) }, { stopSelf() })
         // the panel opens below the CP line and above the HP / type lines, where it hides nothing the IV checker reads
         val r0 = OverlayLayout.panelRect(m.widthPixels, m.heightPixels, m.density)
-        panelPos[0] = r0.left; panelPos[1] = r0.top
+        ivPos[0] = r0.left; ivPos[1] = r0.top
+        bagPos[0] = r0.left
+        bagPos[1] = (m.heightPixels - win.panelHeightPx - Ui.dp(this, 110)).coerceAtLeast(r0.top)
         val saved = runCatching { getSharedPreferences("lens", MODE_PRIVATE).getFloat("scale", OverlayScale.DEFAULT) }.getOrDefault(OverlayScale.DEFAULT)
         scale = fitScale(saved)
 
@@ -200,8 +205,8 @@ class CaptureService : Service() {
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL, PixelFormat.TRANSLUCENT
         ).apply { gravity = Gravity.TOP or Gravity.START; x = bubblePos[0]; y = bubblePos[1] }
         applySize()
-        makeDraggable(win.bubble, bubblePos) { setExpanded(true) }
-        makeDraggable(win.topBar, panelPos, null)
+        makeDraggable(win.bubble, { bubblePos }) { setExpanded(true) }
+        makeDraggable(win.topBar, { panelPos() }, null)
         makeResizable(win.grip)
         select(Tab.IV)
         menuRoot = win.root
@@ -211,12 +216,17 @@ class CaptureService : Service() {
     private fun select(t: Tab) {
         tab = t
         win.showTab(if (t == Tab.BAG) bag.panel else iv.panel, t == Tab.BAG)
+        if (panelOpen) { // move to this tab's own spot
+            val pos = panelPos()
+            lp.x = pos[0]; lp.y = pos[1]
+            menuRoot?.let { b -> runCatching { wm.updateViewLayout(b, lp) }; b.post { place(pos) } }
+        }
     }
 
     private fun setExpanded(open: Boolean) {
         panelOpen = open
         applySize()
-        val pos = if (open) panelPos else bubblePos
+        val pos = if (open) panelPos() else bubblePos
         lp.x = pos[0]; lp.y = pos[1]
         menuRoot?.let { b ->
             runCatching { wm.updateViewLayout(b, lp) }
@@ -227,7 +237,7 @@ class CaptureService : Service() {
     /** [s] limited to the allowed range and to the room left on screen below / right of the window's corner. */
     private fun fitScale(s: Float): Float {
         val m = resources.displayMetrics
-        return OverlayScale.fit(s, panelPos[0], panelPos[1], m.widthPixels, m.heightPixels, win.panelWidthPx, win.panelHeightPx)
+        return OverlayScale.fit(s, panelPos()[0], panelPos()[1], m.widthPixels, m.heightPixels, win.panelWidthPx, win.panelHeightPx)
     }
 
     /** The window is given exactly the footprint of what is drawn, so touches, the clamp and the mask match it. */
@@ -251,7 +261,7 @@ class CaptureService : Service() {
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     runCatching { getSharedPreferences("lens", MODE_PRIVATE).edit().putFloat("scale", scale).apply() }
-                    menuRoot?.post { place(panelPos) }
+                    menuRoot?.post { place(panelPos()) }
                     true
                 }
                 else -> true
@@ -269,16 +279,16 @@ class CaptureService : Service() {
         runCatching { wm.updateViewLayout(b, lp) }
     }
 
-    private fun makeDraggable(handle: View, pos: IntArray, onTap: (() -> Unit)?) {
+    private fun makeDraggable(handle: View, posOf: () -> IntArray, onTap: (() -> Unit)?) {
         val slop = ViewConfiguration.get(this).scaledTouchSlop
         var downX = 0f; var downY = 0f; var startX = 0; var startY = 0; var moved = false
         handle.setOnTouchListener { _, e ->
             when (e.actionMasked) {
-                MotionEvent.ACTION_DOWN -> { downX = e.rawX; downY = e.rawY; startX = pos[0]; startY = pos[1]; moved = false; true }
+                MotionEvent.ACTION_DOWN -> { val pos = posOf(); downX = e.rawX; downY = e.rawY; startX = pos[0]; startY = pos[1]; moved = false; true }
                 MotionEvent.ACTION_MOVE -> {
                     val dx = e.rawX - downX; val dy = e.rawY - downY
                     if (!moved && (abs(dx) > slop || abs(dy) > slop)) moved = true
-                    if (moved) { pos[0] = startX + dx.toInt(); pos[1] = startY + dy.toInt(); place(pos) }
+                    if (moved) { val pos = posOf(); pos[0] = startX + dx.toInt(); pos[1] = startY + dy.toInt(); place(pos) }
                     true
                 }
                 MotionEvent.ACTION_UP -> { if (!moved) onTap?.invoke(); true }
