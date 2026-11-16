@@ -27,6 +27,12 @@ object Metrics {
     const val IV_FOOTER = 22
     const val IV_RESULT = RING + IV_GAP + CHIP_ROW + IV_GAP + 2 * LEAGUE_ROW
     const val IV_NEEDED = IV_HEADER + IV_GAP + IV_RESULT + IV_GAP + IV_FOOTER
+    /** The area a message card (with or without a drawing) has inside the IV card. */
+    const val IV_BODY = INNER_H - IV_HEADER - 2 * IV_GAP - IV_FOOTER
+    const val ART = 40
+    const val ART_GAP = 6
+    const val MESSAGE_LINE = 16   // one 12 sp line with spacing
+    const val MESSAGE_LINES_WITH_ART = 3
 
     // Bag panel, top to bottom (the list takes what is left)
     const val BAG_HEADER = 22

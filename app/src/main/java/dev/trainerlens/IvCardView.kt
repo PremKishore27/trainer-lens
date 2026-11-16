@@ -47,6 +47,9 @@ class IvCardView(ctx: Context) : LinearLayout(ctx) {
         setTextColor(Ui.TEXT2); textSize = 12f; gravity = Gravity.CENTER
         setLineSpacing(0f, 1.1f)
     }
+    private val art = ArtView(ctx)
+    /** A message card: an optional drawing above the text, centred in the card's body. */
+    private val messageBox = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER }
     private val notIt = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
     private val status = Ui.label(ctx, 10f, Ui.TEXT3)
 
@@ -96,7 +99,9 @@ class IvCardView(ctx: Context) : LinearLayout(ctx) {
         // the body is a fixed-size frame holding either the result or a message
         val body = FrameLayout(ctx)
         body.addView(result, FrameLayout.LayoutParams(match, match))
-        body.addView(message, FrameLayout.LayoutParams(match, match))
+        messageBox.addView(art, lp(dp(Metrics.ART), dp(Metrics.ART)).apply { bottomMargin = dp(Metrics.ART_GAP) })
+        messageBox.addView(message, lp(match, wrap))
+        body.addView(messageBox, FrameLayout.LayoutParams(match, match))
         addView(body, lp(match, 0, 1f).apply { topMargin = dp(Metrics.IV_GAP) })
 
         // footer: the status line, or the "Not it?" buttons when the species is uncertain; "Copy log" on the right
@@ -136,10 +141,12 @@ class IvCardView(ctx: Context) : LinearLayout(ctx) {
         val msg = m.message
         if (msg != null) {
             result.visibility = View.GONE
-            message.visibility = View.VISIBLE
+            messageBox.visibility = View.VISIBLE
+            art.visibility = if (m.art == Art.NONE) View.GONE else View.VISIBLE
+            art.set(m.art)
             message.text = msg
         } else {
-            message.visibility = View.GONE
+            messageBox.visibility = View.GONE
             result.visibility = View.VISIBLE
             val color = toneColor(m.tone)
             ring.set(m.ring, color, m.pct, m.pctSub)

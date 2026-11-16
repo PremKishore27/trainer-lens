@@ -13,7 +13,7 @@ import android.widget.TextView
 import android.widget.Toast
 import java.util.Locale
 
-internal enum class BagRowKind { HEADER, ITEM, TEXT }
+internal enum class BagRowKind { HEADER, ITEM, TEXT, ART }
 
 /**
  * Feature 1: bag/item storage advisor.
@@ -30,7 +30,8 @@ class BagFeature(private val ctx: Context) {
     @Volatile private var lastItemsSeen = -1_000_000L
 
     /** One line of the list: a section header, an item with an amount, or a paragraph. */
-    private data class Row(val kind: BagRowKind, val left: String, val right: String = "", val color: Int = Ui.TEXT)
+    private data class Row(val kind: BagRowKind, val left: String, val right: String = "", val color: Int = Ui.TEXT, val art: Art = Art.NONE)
+    private var shownOnItems = false
 
     private fun dp(v: Int) = Ui.dp(ctx, v)
 
@@ -88,7 +89,11 @@ class BagFeature(private val ctx: Context) {
     fun onTokens(tokens: List<Token>, screenH: Int) {
         lastTokens = tokens; lastScreenH = screenH
         val p = ItemParser.parse(tokens, screenH)
-        if (p.counts.isEmpty() && p.capacity == null) { memory.observe(emptyMap()); return }
+        if (p.counts.isEmpty() && p.capacity == null) {
+            memory.observe(emptyMap())
+            if (recentlySeen(SystemClock.elapsedRealtime()) != shownOnItems) refresh() // the player left the Items screen
+            return
+        }
         lastItemsSeen = SystemClock.elapsedRealtime()
         if (p.used != null) { used = p.used; capacity = p.capacity }
         memory.observe(p.counts)
@@ -102,9 +107,13 @@ class BagFeature(private val ctx: Context) {
         val rows = ArrayList<Row>()
         val fillFrac: Float; val fillColor: Int; val fillLabel: String; val adviceText: String
         val types = "${memory.size} types"
+        val onItems = recentlySeen(SystemClock.elapsedRealtime())
+        shownOnItems = onItems
+        val hint = Hints.bag(onItems, memory.size)
+        if (hint == BagHint.NOT_ON_ITEMS) rows += Row(BagRowKind.TEXT, Hints.BAG_NOT_ON_ITEMS, color = Ui.TEXT3)
         if (u == null || c == null) {
             fillFrac = 0f; fillColor = Ui.GREY; fillLabel = types
-            adviceText = "Open the Items screen to read your bag."
+            adviceText = if (hint == BagHint.NONE) "Reading your bag…" else Hints.BAG_GO_ADVICE
         } else {
             // The advice only uses readings seen twice, so one misread while scrolling can't tell you to discard 40 Potions.
             val plan = Recommender.plan(confirmed, u, c, targetFree)
@@ -136,7 +145,10 @@ class BagFeature(private val ctx: Context) {
             rows += Row(BagRowKind.HEADER, "Seen once – scroll slower to confirm")
             rows += Row(BagRowKind.TEXT, unconfirmed.entries.joinToString(" · ") { "${it.key} ×${it.value}" }, color = Ui.TEXT2)
         }
-        if (memory.size == 0) rows += Row(BagRowKind.TEXT,
+        if (hint == BagHint.GO_TO_BAG) {
+            rows += Row(BagRowKind.ART, "", art = Art.BAG)
+            rows += Row(BagRowKind.TEXT, Hints.BAG_GO_TEXT, color = Ui.TEXT2)
+        } else if (memory.size == 0) rows += Row(BagRowKind.TEXT,
             "No items recognised yet. Scroll slowly through the Items list, or tap Copy log and send me the text.", color = Ui.TEXT2)
 
         // Rebuilding the list would reset its scroll position, so only do it when something changed.
@@ -162,6 +174,10 @@ class BagFeature(private val ctx: Context) {
             addView(Ui.label(ctx, 11f, r.color, gravity = Gravity.END or Gravity.CENTER_VERTICAL).apply { text = r.right },
                 LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT))
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(Metrics.BAG_ROW)).apply { topMargin = dp(4) }
+        }
+        BagRowKind.ART -> ArtView(ctx).apply {
+            set(r.art)
+            layoutParams = LinearLayout.LayoutParams(dp(36), dp(36)).apply { topMargin = dp(6); gravity = Gravity.CENTER_HORIZONTAL }
         }
         BagRowKind.TEXT -> TextView(ctx).apply {
             textSize = 11f; setTextColor(r.color); text = r.left

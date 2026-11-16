@@ -48,10 +48,21 @@ class IvFeature(private val ctx: Context, private val worker: Executor) {
     /** True while a Pokémon is shown and nothing is changing – the scan loop can then slow down to save battery. */
     @Volatile var settled = false; private set
 
+    /** The Item bag is on screen (set by the scan loop): the card then says "wrong screen" instead of staying blank. */
+    @Volatile var onItemsScreen = false
+
     fun onFrame(tokens: List<Token>, bmp: Bitmap, screenH: Int, now: Long, ocrTimeMs: Long) {
         val t0 = System.nanoTime()
         lastTokens = tokens; lastScreenH = screenH; ocrMs = ocrTimeMs
         val read = SummaryParser.parse(tokens, screenH)
+        // The Item bag is open and nothing of a Pokémon page (no CP, HP or POWER UP) is on screen: say so right away.
+        // The checks keep this away from an appraisal, which has HP but no CP.
+        if (read == null && onItemsScreen && SummaryParser.hp(tokens) == null && !SummaryParser.hasPowerUp(tokens) &&
+            SummaryParser.cp(tokens, screenH) == null) {
+            tracker.reset(); settled = false; noHpFrames = 0
+            show(CardModels.idle(onItems = true))
+            return
+        }
         if (read != null && !SpeciesDb.ready) {
             SpeciesDb.ensureLoaded(now)
             show(CardModels.message("Loading data…",
@@ -117,7 +128,7 @@ class IvFeature(private val ctx: Context, private val worker: Executor) {
 
         if (now - lastSeen > 5_000) { // no Pokémon page for a while
             tracker.reset(); settled = false
-            show(CardModels.idle())
+            show(CardModels.idle(onItemsScreen))
             return
         }
         val m = tracker.current

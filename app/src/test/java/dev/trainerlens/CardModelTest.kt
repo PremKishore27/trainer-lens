@@ -95,7 +95,7 @@ class CardModelTest {
 
     @Test fun messageCardsHaveNoResultParts() {
         val c = CardModels.idle()
-        assertEquals("Trainer Lens", c.title); assertEquals(CardModels.IDLE_TEXT, c.message)
+        assertEquals("Check a Pokémon", c.title); assertEquals(CardModels.IDLE_TEXT, c.message)
         assertTrue(c.stats.isEmpty() && c.chips.isEmpty() && c.leagues.isEmpty())
     }
 

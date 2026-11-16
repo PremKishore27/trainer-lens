@@ -128,3 +128,47 @@ class RingView(ctx: Context) : View(ctx) {
         canvas.drawText(smallText, cx, cy + 13f * d, small)
     }
 }
+
+/**
+ * A small drawing for the walkthrough cards: a Poké Ball (go to a Pokémon) or a bag (go to the Item bag).
+ * Drawn from basic shapes, so the app carries no game artwork.
+ */
+class ArtView(ctx: Context) : View(ctx) {
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val rect = RectF()
+    private var art = Art.NONE
+
+    fun set(a: Art) { if (a != art) { art = a; invalidate() } }
+
+    override fun onDraw(c: Canvas) {
+        val w = width.toFloat(); val h = height.toFloat()
+        val s = minOf(w, h); val ox = (w - s) / 2f; val oy = (h - s) / 2f
+        when (art) {
+            Art.POKEMON -> ball(c, ox + s / 2, oy + s / 2, s / 2 - s * 0.04f)
+            Art.BAG -> bag(c, ox, oy, s)
+            Art.NONE -> {}
+        }
+    }
+
+    private fun ball(c: Canvas, cx: Float, cy: Float, r: Float) {
+        rect.set(cx - r, cy - r, cx + r, cy + r)
+        paint.style = Paint.Style.FILL
+        paint.color = 0xFFEF4444.toInt(); c.drawArc(rect, 180f, 180f, true, paint)    // red top half
+        paint.color = 0xFFF5F6F8.toInt(); c.drawArc(rect, 0f, 180f, true, paint)      // white bottom half
+        paint.color = 0xFF1F2430.toInt(); paint.style = Paint.Style.STROKE; paint.strokeWidth = r * 0.12f
+        c.drawCircle(cx, cy, r, paint); c.drawLine(cx - r, cy, cx + r, cy, paint)
+        paint.style = Paint.Style.FILL; paint.color = 0xFFF5F6F8.toInt(); c.drawCircle(cx, cy, r * 0.3f, paint)
+        paint.style = Paint.Style.STROKE; paint.color = 0xFF1F2430.toInt(); c.drawCircle(cx, cy, r * 0.3f, paint)
+    }
+
+    private fun bag(c: Canvas, x: Float, y: Float, s: Float) {
+        paint.style = Paint.Style.STROKE; paint.strokeWidth = s * 0.07f; paint.color = 0xFF9CA3AF.toInt()
+        rect.set(x + s * 0.30f, y + s * 0.04f, x + s * 0.70f, y + s * 0.40f); c.drawRoundRect(rect, s * 0.14f, s * 0.14f, paint) // handle
+        paint.style = Paint.Style.FILL; paint.color = 0xFF14B8A6.toInt()
+        rect.set(x + s * 0.12f, y + s * 0.22f, x + s * 0.88f, y + s * 0.96f); c.drawRoundRect(rect, s * 0.18f, s * 0.18f, paint) // body
+        paint.color = 0xFF0F766E.toInt()
+        rect.set(x + s * 0.12f, y + s * 0.22f, x + s * 0.88f, y + s * 0.46f); c.drawRoundRect(rect, s * 0.18f, s * 0.18f, paint) // flap
+        paint.color = 0xFFF5F6F8.toInt()
+        rect.set(x + s * 0.34f, y + s * 0.58f, x + s * 0.66f, y + s * 0.82f); c.drawRoundRect(rect, s * 0.08f, s * 0.08f, paint) // pocket
+    }
+}

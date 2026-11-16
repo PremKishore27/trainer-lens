@@ -151,6 +151,7 @@ class CaptureService : Service() {
                 bag.onTokens(tokens, screenH) // always runs, so the session remembers items even with the panel closed
                 if (ivActive()) {
                     // heavy IV work off the main thread; the bitmap is released when it's done
+                    iv.onItemsScreen = bag.recentlySeen(SystemClock.elapsedRealtime())
                     worker.execute {
                         try { iv.onFrame(tokens, bmp, screenH, SystemClock.elapsedRealtime(), ocrMs) }
                         catch (e: Exception) { /* a bad frame must never stop the scan loop */ }

@@ -3,6 +3,8 @@ package dev.trainerlens
 import java.util.Locale
 
 enum class Tone { GREAT, DECENT, WEAK, NEUTRAL }
+/** A small drawing shown above a walkthrough message: our own Poké Ball / bag icons, no game artwork. */
+enum class Art { NONE, POKEMON, BAG }
 enum class Mark { GOOD, MAYBE, BAD, NONE }
 
 /** One appraisal bar: [min]..[max] out of 15 (equal when the IV is exact). */
@@ -29,13 +31,18 @@ data class CardModel(
     val leagues: List<LeagueRow> = emptyList(),
     val status: String = "",
     val others: List<Species> = emptyList(),
+    val art: Art = Art.NONE,
 )
 
 object CardModels {
-    const val IDLE_TEXT = "Open a Pokémon's page.\nFor exact IVs, tap ☰ → Appraise in the game."
+    const val IDLE_TEXT = "Open your Pokémon list and\ntap a Pokémon. For exact IVs:\n☰ → Appraise in the game."
+    const val WRONG_SCREEN_TEXT = "You're in the Item bag.\nOpen a Pokémon from your list\nto check its IVs."
 
-    fun message(title: String, body: String) = CardModel(title = title, message = body)
-    fun idle() = message("Trainer Lens", IDLE_TEXT)
+    fun message(title: String, body: String, art: Art = Art.NONE) = CardModel(title = title, message = body, art = art)
+
+    /** What the IV tab shows when no Pokémon page is on screen; [onItems] = the Item bag is open instead. */
+    fun idle(onItems: Boolean = false) =
+        if (onItems) message("Wrong screen", WRONG_SCREEN_TEXT, Art.POKEMON) else message("Check a Pokémon", IDLE_TEXT, Art.POKEMON)
 
     fun rating(total: Int) = when {
         total == 45 -> "Perfect ★★★"
@@ -114,5 +121,21 @@ object CardModels {
             status = status,
             others = r.others.distinctBy { it.label }.take(2),
         )
+    }
+}
+
+/** What the Bag tab says about where the player is. */
+enum class BagHint { NONE, GO_TO_BAG, NOT_ON_ITEMS }
+
+object Hints {
+    const val BAG_GO_ADVICE = "Go to your Item bag."
+    const val BAG_GO_TEXT = "In the game: tap the Poké Ball, then Items. Scroll the list slowly."
+    const val BAG_NOT_ON_ITEMS = "Not on the Items screen – showing what I remembered."
+
+    /** Empty memory and not on the Items screen: show the walkthrough; otherwise only a note above the remembered list. */
+    fun bag(onItems: Boolean, remembered: Int) = when {
+        onItems -> BagHint.NONE
+        remembered == 0 -> BagHint.GO_TO_BAG
+        else -> BagHint.NOT_ON_ITEMS
     }
 }
