@@ -7,6 +7,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.animation.ValueAnimator
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -27,6 +28,7 @@ import android.view.MotionEvent
 import android.view.ViewConfiguration
 import android.view.View
 import android.view.WindowManager
+import android.view.animation.DecelerateInterpolator
 import android.util.DisplayMetrics
 import android.util.TypedValue
 import android.view.ViewGroup
@@ -237,9 +239,11 @@ class CaptureService : Service() {
     }
 
     /** [s] limited to the allowed range and to the room left on screen below / right of the window's corner. */
+    private val realH: Int by lazy { realDisplaySize().second }
+    private var settleAnim: ValueAnimator? = null
+
     private fun fitScale(s: Float): Float {
         val m = resources.displayMetrics
-        val realH = realDisplaySize().second
         // on the IV tab the window must also fit the band between the CP and HP lines
         val band = if (tab == Tab.BAG) OverlayScale.MAX else OverlayBand.maxScaleAt(panelPos()[1], win.panelHeightPx, realH)
         return OverlayScale.fit(s, panelPos()[0], panelPos()[1], m.widthPixels, realH, win.panelWidthPx, win.panelHeightPx, band)
@@ -266,7 +270,7 @@ class CaptureService : Service() {
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     runCatching { getSharedPreferences("lens", MODE_PRIVATE).edit().putFloat("scale", scale).apply() }
-                    menuRoot?.post { place(panelPos()) }
+                    menuRoot?.post { settle(panelPos()) }
                     true
                 }
                 else -> true
@@ -275,16 +279,33 @@ class CaptureService : Service() {
     }
 
     /** Moves the window to [pos] (clamped to the screen) and remembers the clamped value. */
-    private fun place(pos: IntArray) {
+    private fun place(pos: IntArray, snap: Boolean = true) {
         val b = menuRoot ?: return
         val m = resources.displayMetrics
-        val realH = realDisplaySize().second
         pos[0] = pos[0].coerceIn(0, maxOf(0, m.widthPixels - b.width))
         pos[1] = pos[1].coerceIn(0, maxOf(0, realH - b.height))
-        // the IV window stays in the free band, so it never hides the HP line the checker has to read
-        if (pos === ivPos && panelOpen) pos[1] = OverlayBand.snapY(pos[1], b.height, realH)
+        // the IV window stays out of the CP / HP lines the checker has to read (see OverlayBand)
+        if (snap && pos === ivPos && panelOpen) pos[1] = OverlayBand.snapY(pos[1], b.height, realH)
         lp.x = pos[0]; lp.y = pos[1]
         runCatching { wm.updateViewLayout(b, lp) }
+    }
+
+    /**
+     * While you drag, the window follows your finger smoothly, wherever it goes. When you let go over the strip it must
+     * not cover, it glides to the nearest allowed spot instead of jumping.
+     */
+    private fun settle(pos: IntArray) {
+        val b = menuRoot ?: return
+        place(pos, snap = false)
+        if (pos !== ivPos || !panelOpen) return
+        val target = OverlayBand.snapY(pos[1], b.height, realH)
+        if (target == pos[1]) return
+        settleAnim?.cancel()
+        settleAnim = ValueAnimator.ofInt(pos[1], target).apply {
+            duration = 200; interpolator = DecelerateInterpolator()
+            addUpdateListener { a -> pos[1] = a.animatedValue as Int; lp.y = pos[1]; runCatching { wm.updateViewLayout(b, lp) } }
+            start()
+        }
     }
 
     private fun makeDraggable(handle: View, posOf: () -> IntArray, onTap: (() -> Unit)?) {
@@ -292,14 +313,15 @@ class CaptureService : Service() {
         var downX = 0f; var downY = 0f; var startX = 0; var startY = 0; var moved = false
         handle.setOnTouchListener { _, e ->
             when (e.actionMasked) {
-                MotionEvent.ACTION_DOWN -> { val pos = posOf(); downX = e.rawX; downY = e.rawY; startX = pos[0]; startY = pos[1]; moved = false; true }
+                MotionEvent.ACTION_DOWN -> { settleAnim?.cancel(); val pos = posOf(); downX = e.rawX; downY = e.rawY; startX = pos[0]; startY = pos[1]; moved = false; true }
                 MotionEvent.ACTION_MOVE -> {
                     val dx = e.rawX - downX; val dy = e.rawY - downY
                     if (!moved && (abs(dx) > slop || abs(dy) > slop)) moved = true
-                    if (moved) { val pos = posOf(); pos[0] = startX + dx.toInt(); pos[1] = startY + dy.toInt(); place(pos) }
+                    if (moved) { val pos = posOf(); pos[0] = startX + dx.toInt(); pos[1] = startY + dy.toInt(); place(pos, snap = false) }
                     true
                 }
-                MotionEvent.ACTION_UP -> { if (!moved) onTap?.invoke(); true }
+                MotionEvent.ACTION_UP -> { if (!moved) onTap?.invoke() else settle(posOf()); true }
+                MotionEvent.ACTION_CANCEL -> { if (moved) settle(posOf()); true }
                 else -> true
             }
         }
