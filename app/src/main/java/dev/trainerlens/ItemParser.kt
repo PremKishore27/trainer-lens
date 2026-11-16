@@ -19,6 +19,7 @@ data class ParsedScreen(val counts: Map<String, Int>, val used: Int?, val capaci
 
 object ItemParser {
     private val capacityRx = Regex("(\\d{1,4})\\s*/\\s*(\\d{1,4})")
+    private val hpWordRx = Regex("\\b(?:hp|kp)\\b", RegexOption.IGNORE_CASE)
     private val countRx = Regex("^[xX×]?\\s*(\\d{1,4})$")
     // Count printed in the same OCR line as the name, before or after it: "Poke Ball x20", "x20 Poke Ball", "×20"
     private val inlineCountRx = Regex("(?:^|\\s)[xX×]\\s?(\\d{1,4})(?=\\s|$)")
@@ -38,6 +39,7 @@ object ItemParser {
         var cap: Int? = null
         // Bag fill like "342/350"; take the one with the largest capacity (item list, not other UI)
         for (t in tokens) {
+            if (hpWordRx.containsMatchIn(t.text)) continue // "163 / 163 HP" on a Pokémon page is not the bag fill
             capacityRx.find(t.text)?.let {
                 val u = it.groupValues[1].toInt(); val c = it.groupValues[2].toInt()
                 if (c in 100..5000 && u <= c && (cap == null || c > cap!!)) { used = u; cap = c }

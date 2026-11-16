@@ -33,7 +33,7 @@ class RealDumpTest {
         Defense  @182,2060,323,2089
         HP  @182,2168,232,2197
         This Dragonite was caught on 13/11/2026  @123,2398,1123,2445
-        und Nürnberg, Bayern, Germany.  @216,2459,958,2507
+        und Springfield, Example State, Country.  @216,2459,958,2507
     """.trimIndent()
 
     /** Parses the dump format "text  @l,t,r,b" back into tokens. */

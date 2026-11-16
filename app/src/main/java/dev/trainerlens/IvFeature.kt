@@ -4,13 +4,11 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.Color
 import android.os.Handler
 import android.os.Looper
 import android.view.View
-import android.widget.Button
-import android.widget.LinearLayout
-import android.widget.TextView
+import android.widget.Toast
+import java.util.Locale
 import java.util.concurrent.Executor
 
 /**
@@ -19,33 +17,30 @@ import java.util.concurrent.Executor
  * All heavy work (pixel scans, the IV solver, rank tables) runs on [worker]; the UI is only touched through [main].
  *  1. Pokémon page: CP + HP + stardust + the clues that identify the species → every IV spread / level that fits.
  *  2. In-game appraisal: the three bars are measured from the screenshot → exact IVs.
- * A page is shown from its first frame (marked ⏳) and confirmed on the second, so swiping between Pokémon is fast.
+ * A page is shown from its first frame (marked "reading…") and confirmed on the second, so swiping between Pokémon
+ * is fast. What is shown is a [CardModel] (plain data) drawn by [IvCardView], which has a fixed size.
  */
 class IvFeature(private val ctx: Context, private val worker: Executor) {
     private val main = Handler(Looper.getMainLooper())
-    private val idleText = "Open a Pokémon's page.\nFor exact IVs, tap ☰ → Appraise in the game."
-    private val card = TextView(ctx).apply {
-        setTextColor(Color.WHITE); textSize = 15f; setPadding(24, 16, 24, 16)
-        text = idleText; setBackgroundColor(GREY)
+    private val view = IvCardView(ctx).apply {
+        bind(CardModels.idle())
+        onPick = { sp -> worker.execute { if (tracker.choose(sp)) render() } }
+        onCopy = { copyDebug() }
     }
-    private val chips = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; visibility = View.GONE }
-    val panel: View = LinearLayout(ctx).apply {
-        orientation = LinearLayout.VERTICAL
-        addView(card)
-        addView(chips)
-        addView(Button(ctx).apply { text = "📋 Copy screen text (for bug reports)"; textSize = 11f; setOnClickListener { copyDebug() } })
-    }
+    val panel: View = view
 
     // worker-thread state
     private val tracker = MonTracker { m -> SpeciesDb.get()?.let { Identify.analyze(m, it) } }
     private var arc: ArcReader? = null
     @Volatile private var lastSeen = 0L
-    private var shown = ""
+    private var shown: CardModel? = null
     private var lastBars: Iv? = null
     private var lastTokens: List<Token> = emptyList()
     private var lastScreenH = 0
     private var ocrMs = 0L
     private var analysisMs = 0L
+    private var noHpFrames = 0
+    private var hintShown = false
 
     /** A Pokémon page was read within the last 3 s – worth scanning fast. Otherwise (map, other screens) scan slowly. */
     fun pageRecentlySeen(now: Long) = now - lastSeen < 3_000
@@ -53,13 +48,25 @@ class IvFeature(private val ctx: Context, private val worker: Executor) {
     /** True while a Pokémon is shown and nothing is changing – the scan loop can then slow down to save battery. */
     @Volatile var settled = false; private set
 
+    /** The Item bag is on screen (set by the scan loop): the card then says "wrong screen" instead of staying blank. */
+    @Volatile var onItemsScreen = false
+
     fun onFrame(tokens: List<Token>, bmp: Bitmap, screenH: Int, now: Long, ocrTimeMs: Long) {
         val t0 = System.nanoTime()
         lastTokens = tokens; lastScreenH = screenH; ocrMs = ocrTimeMs
         val read = SummaryParser.parse(tokens, screenH)
+        // The Item bag is open and nothing of a Pokémon page (no CP, HP or POWER UP) is on screen: say so right away.
+        // The checks keep this away from an appraisal, which has HP but no CP.
+        if (read == null && onItemsScreen && SummaryParser.hp(tokens) == null && !SummaryParser.hasPowerUp(tokens) &&
+            SummaryParser.cp(tokens, screenH) == null) {
+            tracker.reset(); settled = false; noHpFrames = 0
+            show(CardModels.idle(onItems = true))
+            return
+        }
         if (read != null && !SpeciesDb.ready) {
             SpeciesDb.ensureLoaded(now)
-            show("Loading Pokémon data… (internet needed)" + (SpeciesDb.lastError?.let { "\nLast error: $it" } ?: ""), GREY, "loading", emptyList())
+            show(CardModels.message("Loading data…",
+                "Pokémon data comes from the internet.\nCheck your connection." + (SpeciesDb.lastError?.let { "\n\nLast error: $it" } ?: "")))
             return
         }
         var changed = false
@@ -82,7 +89,16 @@ class IvFeature(private val ctx: Context, private val worker: Executor) {
         // different Pokémon than the one we're showing, the card is stale: drop it instead of showing the old Pokémon
         // (and never attach this Pokémon's appraisal to the previous one).
         val hpNow = if (read == null) SummaryParser.hp(tokens) else read.hp
+        // The appraisal dialog hides the CP but not the "This X was caught on …" line, which names the Pokémon. Use it
+        // for the Pokémon we couldn't identify (renamed, or a regional form), and keep that Pokémon alive meanwhile.
+        if (read == null && hpNow != null && tracker.knowsHp(hpNow)) {
+            lastSeen = now
+            val caught = SpeciesDb.get()?.let { SpeciesDb.readCaught(tokens, it) }.orEmpty()
+            if (caught.isNotEmpty() && tracker.observeCaught(hpNow, Clues(caught = caught))) changed = true
+        }
         if (read == null && hpNow != null && tracker.hpOnly(hpNow)) changed = true
+        // A Pokémon page whose CP is readable but whose HP line isn't: the window is probably covering it.
+        noHpFrames = if (read == null && hpNow == null && SummaryParser.hasPowerUp(tokens) && SummaryParser.cp(tokens, screenH) != null) noHpFrames + 1 else 0
         val bars = AppraisalReader.read(tokens, bmp)
         if (bars != null && tracker.current != null && (read != null || hpNow == tracker.current?.hp)) {
             if (tracker.observeBars(bars)) { lastSeen = now; changed = true }
@@ -93,21 +109,31 @@ class IvFeature(private val ctx: Context, private val worker: Executor) {
             val stableBars = bars != null && bars == lastBars
             lastBars = bars
             if (stableBars) {
-                show("${"%.0f".format(bars!!.pct)}%  ${bars.a}/${bars.d}/${bars.s}  ${rating(bars.total)}\n✔ from appraisal\n" +
-                    "CP not readable yet – close the appraisal for level & PvP", GREY, "bars-$bars", emptyList())
-            } else show("Reading this Pokémon… (HP $hpNow, CP not readable yet)", GREY, "reading-$hpNow", emptyList())
+                show(CardModels.message("From appraisal",
+                    "${CardModels.pct0(bars!!.pct)}%  ${bars.a}/${bars.d}/${bars.s}\n${CardModels.rating(bars.total)}\n\n" +
+                        "CP not readable yet – close the appraisal for level and PvP."))
+            } else show(CardModels.message("Reading…", "HP $hpNow · CP not readable yet"))
             analysisMs = (System.nanoTime() - t0) / 1_000_000
             return
         }
 
+        if (noHpFrames >= 3) {
+            lastSeen = now; settled = true; hintShown = true // nothing will change until the window moves: scan calmly
+            show(CardModels.message("Can't read the HP line",
+                "This window is covering the Pokémon's name, HP or type lines.\nDrag it up or down, or hide it with –."))
+            analysisMs = (System.nanoTime() - t0) / 1_000_000
+            return
+        }
+        if (hintShown) { hintShown = false; shown = null } // the page is readable again: show the Pokémon, not the hint
+
         if (now - lastSeen > 5_000) { // no Pokémon page for a while
             tracker.reset(); settled = false
-            show(idleText, GREY, "idle", emptyList())
+            show(CardModels.idle(onItemsScreen))
             return
         }
         val m = tracker.current
         settled = m != null && m.frames >= 3 && !changed
-        if (changed || shown.isEmpty()) render()
+        if (changed || shown == null) render()
         analysisMs = (System.nanoTime() - t0) / 1_000_000
     }
 
@@ -117,95 +143,22 @@ class IvFeature(private val ctx: Context, private val worker: Executor) {
         if (r == null) {
             val c = m.clues()
             val why = if (SpeciesDb.candidates(c) == null && SpeciesDb.widened(c) == null)
-                "Can't tell which Pokémon this is (renamed, and no candy / type line read).\nTap 📋 below and send me the text."
-            else "No IV spread fits these numbers.\nMega / buddy-boosted, or a misread – hold still for a second."
-            show("CP ${m.cp} · HP ${m.hp}\n$why", GREY, m.signature(), emptyList())
+                "Can't tell which Pokémon this is.\nOpen ☰ → Appraise in the game:\nits \"caught on\" line names it."
+            else "No IV spread fits these numbers.\nMega, buddy-boosted or a misread.\nAppraise it in the game to name it."
+            show(CardModels.message("CP ${m.cp} · HP ${m.hp}", why))
             return
         }
         // An appraisal fixed the exact level: use it to calibrate the level arc's end point
         val d = m.dot
         if (m.appraised != null && r.exact != null && r.levelMin == r.levelMax && d != null) arc?.calibrateMax(d, r.levelMin)
-        show(format(r, m), color(r), m.signature(), r.others.distinctBy { it.label }.take(3))
+        show(CardModels.from(r, m))
     }
 
-    private fun rating(total: Int) = when {
-        total == 45 -> "Perfect ★★★"
-        total >= 37 -> "Excellent ★★★"
-        total >= 30 -> "Good ★★"
-        total >= 23 -> "Decent ★"
-        else -> "Weak"
-    }
-
-    private fun lv(x: Double) = if (x % 1.0 == 0.0) "%.0f".format(x) else "%.1f".format(x)
-
-    private fun format(r: IvResult, m: Mon): String {
-        val ap = m.appraised
-        val sb = StringBuilder(r.species.label)
-        if (r.guessed) sb.append("  (best guess)") else if (r.nickname) sb.append("  (nickname)")
-        if (m.provisional) sb.append("  ⏳")
-        sb.append('\n')
-        val e = r.exact
-        val level = if (r.levelMin == r.levelMax) "Lv ${lv(r.levelMin)}" else "Lv ${lv(r.levelMin)}–${lv(r.levelMax)}"
-        if (e != null) {
-            sb.append("${"%.0f".format(e.pct)}%  ${e.a}/${e.d}/${e.s}  ${rating(e.total)}\n")
-        } else {
-            sb.append("${"%.0f".format(r.pctMin)}–${"%.0f".format(r.pctMax)}%  (${r.candidates.size} possible)\n")
-        }
-        sb.append("$level · CP ${m.cp} · HP ${m.hp}\n")
-        sb.append(pvpVerdict(r, m.cp))
-        when {
-            ap != null && e != null -> sb.append("\n✔ from appraisal")
-            ap != null -> sb.append("\nAppraisal ${ap.a}/${ap.d}/${ap.s} didn't match CP – re-open the Pokémon")
-            else -> sb.append("\nAppraise in-game for the exact value")
-        }
-        arc?.let { sb.append("\n").append(if (r.arcUsed) "arc ✓ used" else it.status()) }
-        return sb.toString()
-    }
-
-    /** One line: is it worth keeping for PvP? Good = top 100 of 4,096 spreads in a league it can still enter. */
-    private fun pvpVerdict(r: IvResult, cp: Int): String {
-        val leagues = listOf(Triple("Great", 1500, r.great), Triple("Ultra", 2500, r.ultra), Triple("Little", 500, r.little))
-        val good = leagues.filter { (_, cap, rk) -> rk != null && cp <= cap && rk.best <= 100 }
-        if (good.isNotEmpty()) {
-            val (name, _, rk) = good.minBy { it.third!!.best }
-            val sure = rk!!.worst <= 100
-            return "PvP: ${if (sure) "✅ Good" else "🤔 Maybe good"} for $name League (#${rk.best}${if (rk.worst != rk.best) "–${rk.worst}" else ""})"
-        }
-        val master = r.candidates.all { it.total >= 42 } && cp > 2500
-        if (master) return "PvP: ✅ Good IVs for Master League"
-        // great spread, but it has already been powered past the league's CP cap (levels can't go down)
-        val tooHigh = leagues.filter { (_, cap, rk) -> rk != null && cp > cap && rk.best <= 100 }.minByOrNull { it.third!!.best }
-        if (tooHigh != null) return "PvP: ❌ CP too high for ${tooHigh.first} League (IVs would be #${tooHigh.third!!.best})"
-        return "PvP: ❌ Not good for PvP"
-    }
-
-    private fun color(r: IvResult): Int {
-        val bestRank = listOfNotNull(r.great?.best, r.ultra?.best).minOrNull() ?: Int.MAX_VALUE
-        return when {
-            bestRank <= 100 || r.pctMin >= 91 -> 0xCC1B7F3B.toInt()  // great
-            bestRank <= 300 || r.pctMin >= 80 -> 0xCC8A6D00.toInt() // decent
-            else -> 0xCC8B1E1E.toInt()                               // weak
-        }
-    }
-
-    /** Updates the card (and the "not it?" buttons) on the main thread; skips work if nothing changed. */
-    private fun show(text: String, bg: Int, key: String, others: List<Species>) {
-        val k = "$key|$text"
-        if (k == shown) return
-        shown = k
-        main.post {
-            card.text = text; card.setBackgroundColor(bg)
-            chips.removeAllViews()
-            if (others.isEmpty()) { chips.visibility = View.GONE; return@post }
-            chips.addView(TextView(ctx).apply { this.text = "Not it? "; setTextColor(Color.LTGRAY); textSize = 12f; setPadding(8, 16, 8, 0) })
-            others.forEach { sp ->
-                chips.addView(Button(ctx).apply {
-                    this.text = sp.label; textSize = 11f; isAllCaps = false
-                    setOnClickListener { worker.execute { if (tracker.choose(sp)) render() } }
-                })
-            }
-            chips.visibility = View.VISIBLE
-        }
+    /** Updates the card on the main thread; skips the work if nothing changed. */
+    private fun show(model: CardModel) {
+        if (model == shown) return
+        shown = model
+        main.post { view.bind(model) }
     }
 
     /** Copies what the OCR read on the last frame (text + position) and what the app made of it. */
@@ -215,6 +168,8 @@ class IvFeature(private val ctx: Context, private val worker: Executor) {
             val clues = d?.let { SpeciesDb.readClues(lastTokens, lastScreenH, it) }
             val txt = buildString {
                 append("Trainer Lens ${BuildConfig.VERSION_NAME} · IV · screen height $lastScreenH · OCR ${ocrMs} ms · analysis ${analysisMs} ms\n")
+                append("Overlay: ${Diag.line}\n")
+                append("Read: cp=${SummaryParser.cp(lastTokens, lastScreenH)} hp=${SummaryParser.hp(lastTokens)} powerUp=${SummaryParser.hasPowerUp(lastTokens)} noHpFrames=$noHpFrames\n")
                 append("Clues: names=${clues?.names?.map { it.label }} family=${clues?.family?.map { it.name }?.distinct()} types=${clues?.types} " +
                     "size=${clues?.heightM}m/${clues?.weightKg}kg evolve=${clues?.evolveCost} caught=${clues?.caught?.map { it.name }?.distinct()}\n")
                 tracker.current?.let { append("Pokémon: CP ${it.cp} HP ${it.hp} dust ${it.dust} frames ${it.frames} appraised ${it.appraised}\n") }
@@ -222,12 +177,11 @@ class IvFeature(private val ctx: Context, private val worker: Executor) {
                 append("---\n")
                 lastTokens.sortedBy { it.box.top }.forEach { append("${it.text}  @${it.box.left},${it.box.top},${it.box.right},${it.box.bottom}\n") }
             }
+            val n = lastTokens.size
             main.post {
                 (ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Trainer Lens IV", txt))
-                card.text = "Copied ${lastTokens.size} text lines – paste them in your message.\n\n" + card.text
+                Toast.makeText(ctx, String.format(Locale.ROOT, "Copied %d text lines", n), Toast.LENGTH_SHORT).show()
             }
         }
     }
-
-    private companion object { val GREY = 0xCC555555.toInt() }
 }

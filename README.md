@@ -15,17 +15,22 @@ how to clean up your **item bag**, and the **IVs and PvP rank** of any Pokémon 
 
 ### ⬇️ [Download the latest APK](https://github.com/PremKishore27/trainer-lens/releases/latest/download/TrainerLens.apk)
 
+Android 8.0+ · free · no account · [step-by-step install guide](#install) · [what's new](CHANGELOG.md)
+
+**Jump to:** [Features](#features) · [Install](#install) · [Using it](#using-it) · [Troubleshooting](#troubleshooting) · [Privacy](#privacy--permissions) · [FAQ](#faq) · [Build from source](#build-from-source) · [Contributing](#contributing)
+
 ---
 
 ## Features
 
 | | Feature | What it shows |
 |---|---|---|
-| 🖐️ | **Movable overlay** | One 🔍 bubble you can drag anywhere, with 🎒 Bag and 📊 IV tabs. |
+| 🖐️ | **Movable glass overlay** | A 🔍 bubble you can drag anywhere. Tap it for one fixed-size, frosted-glass window with **IV** and **Bag** tabs – it never resizes, whichever Pokémon you open. Drag it by its top bar; the bubble and the window each remember their own spot. One **A− / A+** button switches between a larger and a smaller window. |
+| 🧭 | **Guided hints** | If you're on the wrong screen, the card says so with a small drawing: *Go to your Item bag* on the Bag tab, *Open a Pokémon* (or *Wrong screen – you're in the Item bag*) on the IV tab. |
 | 🎒 | **Bag advisor** | Remembers your items for the whole session while you scroll. Shows free slots, what you **can remove** (over your keep limit) and what to **keep** – even when the bag isn't full. When it is full, it tells you exactly what to discard to free the slots you want. |
 | 📊 | **IV checker** | Open any Pokémon with the IV tab selected. **Appraise it for exact IVs** – the app measures the appraisal bars like Poké Genie. The card shows **IV %**, appraisal **stars**, the **Attack / Defense / HP** spread, estimated **level**, and **Little / Great / Ultra League rank**. |
-| 🌍 | **Nicknames & regional forms** | Finds the species from its candy label, types, size and EVOLVE button – never from the name alone – so renamed Pokémon and Alolan / Galarian / Hisuian forms work. Shows **"Not it?"** buttons when two species fit. |
-| ⚡ | **Fast swiping** | A new Pokémon is shown from the first frame it's read (marked ⏳) and confirmed on the next; heavy work runs in the background. The 📋 button shows how long OCR and analysis took on your phone. |
+| 🌍 | **Nicknames & regional forms** | Finds the species from its candy label, types, size and EVOLVE button – never from the name alone – so renamed Pokémon and Alolan / Galarian / Hisuian forms work. Shows **"Not it?"** buttons when two species fit. If a Pokémon still can't be identified, **appraise it**: the *"This … was caught on …"* line on that screen names it and the app picks it up by itself. |
+| ⚡ | **Fast swiping** | A new Pokémon is shown from the first frame it's read (marked *reading…*) and confirmed on the next; heavy work runs in the background. **Copy log** shows how long OCR and analysis took on your phone. |
 | 🎯 | **Level arc** | Reads the white dot on the level arc (like Poké Genie) and calibrates itself to your phone. |
 | ✅ | **Tested on every Pokémon** | Each build checks ~76,000 cases across all 1,168 forms against the game data. |
 | ✨ | **Shadow / purified / lucky** | Understands their different stardust costs. |
@@ -34,14 +39,19 @@ how to clean up your **item bag**, and the **IVs and PvP rank** of any Pokémon 
 ### Example IV card
 
 ```
-Kingdra
-91%  15/13/13  Excellent ★★★
-Lv 39 · CP 2578 · HP 152
-PvP: ❌ Not good for PvP
-✔ from appraisal
+Kingdra                         nickname
+ ( 91% )  ATK ▬▬▬▬▬▬▬ 15
+ ( 41/45) DEF ▬▬▬▬▬▬  13
+          HP  ▬▬▬▬▬▬  13
+[ Lv 39 ] [ CP 2578 ] [ HP 152 ]
+Little —          Great  —
+Ultra  CP too high  Master —
+Excellent ★★★ · exact
 ```
 
-Green card = great Pokémon (top-25 PvP rank or ≥ 98 %), yellow = decent, red = weak.
+The ring and bars are green for a great Pokémon (top-100 PvP rank or ≥ 91 %), amber for decent, red for weak.
+League rows: ✓ = top 100 of 4,096 spreads, ? = maybe (depends on the exact IVs), ✗ = not good, *CP too high* = already past that league's cap.
+The overlay hides itself from its own screen reading (its area is blacked out before text recognition), so it can't misread its own numbers.
 How the numbers are calculated (formulas, tables, worked example): **[docs/IV-CALCULATIONS.md](docs/IV-CALCULATIONS.md)**.
 
 ---
@@ -68,6 +78,9 @@ Trainer Lens isn't on the Play Store, so Android shows a few extra safety prompt
 
 4. Switch to Pokémon GO. **Drag the 🔍 bubble** anywhere on the screen; **tap it** to open the panel with the **🎒 Bag** and **📊 IV** tabs.
 
+5. **Check that it works:** open a Pokémon's page – the **IV** card fills in within a second or two. On the **Bag** tab, open **Items** in the game.
+   Not working? See [Troubleshooting](#troubleshooting).
+
 **Updating:** install the new APK over the old one – permissions and settings stay.
 <sub>Installed a build older than v0.2.4? Uninstall it once first; it was signed with a different key.</sub>
 
@@ -78,13 +91,17 @@ Tested on: Motorola Signature (Android 17). Requires Android 8.0 or newer.
 ## Using it
 
 ### The overlay
-- **Drag** the 🔍 bubble anywhere. **Tap** it to open/close the panel.
-- **🎒 Bag** and **📊 IV** tabs: info shows only for the tab you pick. **■ Stop** ends the session.
+- **Drag** the 🔍 bubble anywhere. **Tap** it to open the window.
+- In the window's top bar: the **IV | Bag** switch, the **A− / A+** size button, **–** (back to the bubble) and **Stop** (ends the session). Drag the bar to move the window.
+- The window opens in the free band between the CP line and the HP line, so it hides nothing the app reads.
+- **Stuck?** The cards tell you where to go: on the IV tab, *Check a Pokémon* / *Wrong screen* with a Poké Ball drawing; on the Bag tab, *Go to your Item bag* with a bag drawing.
 
 ### 🎒 Bag advisor
-1. In Pokémon GO open **Items**. Tap 🔍 → **🎒 Bag** (tap **Reset** to start fresh).
+1. In Pokémon GO tap the Poké Ball → **Items**. Tap 🔍 → **Bag** (tap **Reset** to start fresh). Not on the Items screen yet? The Bag tab shows *Go to your Item bag*.
 2. Scroll **slowly** through the whole list. The session **remembers** every item it reads (*remembered: N item types*) until you tap **Reset** or **Stop** – even with the panel closed.
-   A count is only accepted when it's read the same on two frames in a row (the list isn't moving), and rows cut off at the screen edge are ignored, so scrolling doesn't create wrong numbers.
+   While the Items list is on screen the app scans about 3 times a second. A count is **confirmed** when it is read the same on two frames;
+   an item seen only once is still remembered (it counts in *N types*) but is listed under *Seen once – scroll slower to confirm* and is kept out of the discard advice until it is seen again.
+   Rows cut off at the screen edge are ignored. Tip: close the panel (**–**) while you scroll, so it doesn't cover part of the list.
 3. Read the panel:
    - Items are sorted by **rarity**: **Common** (Potion, Super Potion, Nanab, Revive, Poké Ball, Hyper Potion, Razz, Great Ball, Pinap) are suggested first,
      then **Uncommon** (Max Potion, Max Revive, Ultra Ball, Silver Pinap) – only their surplus. **Rare** items are never suggested.
@@ -100,23 +117,44 @@ Tested on: Motorola Signature (Android 17). Requires Android 8.0 or newer.
 Keep limits and rarity are in [`Rules.kt`](app/src/main/java/dev/trainerlens/Rules.kt) – earlier items in the list are suggested first.
 
 ### 📊 IV checker
-Tap 🔍 → **📊 IV**, then open a Pokémon. For the **exact** result, appraise it in-game (☰ → Appraise) and keep the bars on screen for a second.
+Tap 🔍 → **IV**, then open a Pokémon from your Pokémon list. The window opens in the free band between the CP line and the HP line, so it hides nothing the app reads; drag it by its top bar if you want it elsewhere.
+The **A− / A+** button in the top bar switches the window between a larger and a smaller size (it remembers your choice).
+**Renamed Pokémon:** if the card says *Can't tell which Pokémon this is*, open ☰ → **Appraise** in the game. The app reads the *"This … was caught on …"* line of that screen (also "Alolan Exeggutor" style names) and identifies the Pokémon by itself.
+If it covers the Pokémon's HP / name / type lines, the card says **Can't read the HP line** – drag the window up or down. For the **exact** result, appraise it in-game (☰ → Appraise) and keep the bars on screen for a second.
 The card shows:
 - **IV % out of 100** – 15/15/15 = 100 %, 12/13/13 = 38/45 = **84 %** – with the spread and a rating (Perfect / Excellent / Good / Decent / Weak).
 - **Level**, CP and HP.
-- **One PvP verdict** – ✅ good for Great / Ultra / Little League (top 100 spread), ❌ not good, or ❌ CP already too high.
+- **League ranks** – Little / Great / Ultra / Master rows: ✓ top-100 spread, ? maybe, ✗ not good, or *CP too high* if it is already past that league's cap.
 
 Without an appraisal it works from CP + HP + stardust alone: exact when only one spread fits, otherwise a **range**
-like `84–96% (5 possible)` and *"🤔 Maybe good"* if only some of them rank well. Low-level Pokémon often give a range.
+like `84–96% (5 possible)` and a **?** next to a league if only some of them rank well. Low-level Pokémon often give a range.
 League ranks compare all 4,096 spreads of that species (#1 = best possible) – see [the calculations](docs/IV-CALCULATIONS.md#6-pvp-league-ranks-and-the-verdict-line).
 
 ---
 
 ## Privacy & permissions
 
-- 📵 Screen images are processed **on the phone** by Google ML Kit and immediately discarded. Nothing is recorded, saved or uploaded.
-- 🌐 The only internet request is downloading Pokémon base stats from `pogoapi.net` (no data about you is sent).
-- 🔒 No accounts, no ads, no analytics, no trackers.
+- 📵 Screen images are processed **on the phone** by Google ML Kit and immediately discarded. The app never records, saves or uploads them.
+- 🌐 The app's only internet request is downloading Pokémon base stats from `pogoapi.net` (no data about you is sent).
+- 🔒 No accounts, no ads, and no analytics or trackers of its own.
+- ℹ️ Like any app that uses Google's ML Kit, the ML Kit library itself may send Google anonymous technical diagnostics (such as timings and device model) – not your screen content. See Google's [ML Kit data disclosure](https://developers.google.com/ml-kit/android-data-disclosure).
+- 🔑 Permissions explained: *screen recording* (the only way an app can read another app's screen), *display over other apps* (the bubble), *notifications* (Android requires one while the screen is read), *internet* (the stats download), *battery* (optional – keeps the overlay alive).
+
+## Troubleshooting
+
+| Problem | What to do |
+|---|---|
+| The IV card says **Check a Pokémon** | Open a Pokémon from your Pokémon list (not the map). |
+| **Wrong screen** on the IV tab | You're in the Item bag. Go back and open a Pokémon. |
+| **Go to your Item bag** on the Bag tab | In the game tap the Poké Ball → Items, then scroll the list slowly. |
+| **Can't read the HP line** | The window covers the Pokémon's name / HP / type lines. Drag it up or down, or tap **A−** to make it smaller. |
+| **Can't tell which Pokémon this is** | Appraise the Pokémon (☰ → Appraise). The *caught on* line names it. |
+| **No IV spread fits** | Wait a second (OCR may have misread), or it's a Mega / buddy-boosted Pokémon. |
+| **Loading data…** | The Pokémon stats come from the internet. Check your connection. |
+| The bubble disappeared | Android stopped the screen capture. Open Trainer Lens and tap **▶ Start session** again; step 4 (battery) helps. |
+| *Display over other apps* is greyed out | Do step 2: *App info → ⋮ → Allow restricted settings*. |
+
+Anything else: [open an issue](https://github.com/PremKishore27/trainer-lens/issues/new/choose) and attach the **Copy log** text.
 
 ## Limitations
 
@@ -129,7 +167,7 @@ League ranks compare all 4,096 spreads of that species (#1 = best possible) – 
 
 **Is this allowed?** It's an unofficial tool. It doesn't modify, automate or connect to the game, but any third-party tool is used at your own risk.
 **Does it recognise the Pokémon from its picture?** No – the text on the page (candy, types, size, EVOLVE) is exact, while no on-device model separates 1,000+ Pokémon forms reliably. See [the calculations](docs/IV-CALCULATIONS.md#5-which-pokémon-is-it-nicknames-and-regional-forms).
-**It says "Can't tell which Pokémon this is".** Tap **📋 Copy screen text** in the IV tab and paste it into a [GitHub issue](https://github.com/PremKishore27/trainer-lens/issues) – it shows every line that was read and where.
+**It says "Can't tell which Pokémon this is".** Open ☰ → **Appraise** on that Pokémon in the game; the app reads the *"This … was caught on …"* line and names it. Still stuck? Tap **Copy log** and paste it into a [GitHub issue](https://github.com/PremKishore27/trainer-lens/issues) – **first remove the "caught on … at <place>" line from the pasted text if you don't want to share where you caught it.**
 **Why does it need screen recording?** That's the only way an Android app can see what another app shows. The recording never leaves your phone.
 **The bubble disappeared.** Android may stop the screen capture after a while – open Trainer Lens and tap **▶ Start session** again. Step 4 (battery) helps.
 **"Display over other apps" is greyed out.** Do step 2: *App info → ⋮ → Allow restricted settings*.
@@ -152,12 +190,15 @@ Every push builds an APK on GitHub Actions; pushes to `main` publish a new [Rele
 
 | File | Role |
 |---|---|
-| `CaptureService.kt` | Screen capture, OCR loop (1×/second), draggable overlay with tabs |
+| `CaptureService.kt` | Screen capture, OCR loop, the fixed-size draggable glass window (bubble ⇄ panel) |
+| `Ui.kt` · `IvCardView.kt` · `CardModel.kt` | Overlay look: colours, ring/bar views, the IV card, and its content as plain testable data |
 | `BagFeature.kt` · `ItemParser.kt` · `Recommender.kt` · `Rules.kt` | Bag advisor |
 | `IvFeature.kt` · `SummaryParser.kt` · `IvAnalyzer.kt` · `IvSolver.kt` | IV checker |
 | `Cpm.kt` | CP multiplier and stardust tables, CP/HP formulas |
 | `Pvp.kt` | League rank tables |
 | `Species.kt` | Base stats from pogoapi.net, forms |
+| `Layout.kt` | Fixed overlay sizes (dp), window placement and the self-capture mask |
+| `MonTracker.kt` · `BagMemory.kt` | Follow the Pokémon / bag items across frames |
 | `MainActivity.kt` | Setup screen with the 5 steps |
 
 </details>
@@ -166,9 +207,17 @@ Every push builds an APK on GitHub Actions; pushes to `main` publish a new [Rele
 
 - [x] Bag advisor
 - [x] IV checker with PvP ranks
-- [ ] Read the in-game appraisal for exact IVs
+- [x] Read the in-game appraisal for exact IVs
+- [x] Name renamed Pokémon from the appraisal's *caught on* line
+- [x] Guided hints when you're on the wrong screen
 - [ ] Editable keep limits inside the app
 - [ ] Stickers & more languages
+
+---
+
+## Contributing
+
+Bug reports, ideas and pull requests are welcome – see [CONTRIBUTING.md](CONTRIBUTING.md). Please read the [Code of Conduct](CODE_OF_CONDUCT.md) and, for security problems, [SECURITY.md](SECURITY.md).
 
 ---
 

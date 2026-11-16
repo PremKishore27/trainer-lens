@@ -26,6 +26,11 @@ class Mon(val cp: Int, val hp: Int) {
     private val caughtVotes = HashMap<String, Int>()
     private val caughtOf = HashMap<String, List<Species>>()
 
+    /** Only the "This X was caught on …" clue, from a frame that has no readable CP (the appraisal dialog hides it). */
+    fun addCaught(c: Clues) {
+        c.caught.firstOrNull()?.let { caughtOf[it.id] = c.caught; caughtVotes.merge(it.id, 2, Int::plus) } // outvotes a stray reading
+    }
+
     fun add(c: Clues, dust: Int?) {
         frames++
         c.names.forEach { nameVotes.merge(it, 1, Int::plus) }
@@ -101,6 +106,27 @@ class MonTracker(private val analyze: (Mon) -> IvResult?) {
     private fun commit(m: Mon, r: IvResult?) {
         previous = current; current = m; result = r; sig = m.signature(); bad = null; pendingBars = null
     }
+
+    /**
+     * A frame with no readable CP but with this HP (the appraisal dialog) carries the "caught" line, which names the
+     * species. It goes to the Pokémon we show, or to the one we could not identify yet, and re-runs the analysis.
+     * @return true when what should be shown has changed
+     */
+    fun observeCaught(hp: Int, clues: Clues): Boolean {
+        if (clues.caught.isEmpty()) return false
+        val cur = current
+        if (cur != null && cur.hp == hp) { cur.addCaught(clues); return refresh(cur) }
+        val b = bad
+        if (b != null && b.hp == hp) {
+            b.addCaught(clues)
+            val r = analyze(b)
+            if (r != null && (!r.guessed || b.frames >= 2)) { commit(b, r); return true }
+        }
+        return false
+    }
+
+    /** The unidentified Pokémon (or the shown one) has this HP: the appraisal dialog is open for it. */
+    fun knowsHp(hp: Int): Boolean = current?.hp == hp || bad?.hp == hp
 
     /** Appraisal bars count once they're read identically on two frames. */
     fun observeBars(bars: Iv?): Boolean {

@@ -3,3 +3,7 @@ build/
 local.properties
 *.apk
 .DS_Store
+graphify-out/
+
+# downloaded CI builds
+/apk/

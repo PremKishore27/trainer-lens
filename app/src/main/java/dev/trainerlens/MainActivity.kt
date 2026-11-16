@@ -56,7 +56,8 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
         })
         col.addView(button("5. ▶ Start session") { start() })
-        col.addView(hint("Asks to record the screen – choose \"Entire screen\". Drag the 🔍 bubble anywhere; tap it for the 🎒 Bag and 📊 IV tabs. " +
+        col.addView(hint("Asks to record the screen – choose \"Entire screen\". Then switch to Pokémon GO and drag the 🔍 bubble anywhere; tap it to open the window with the IV and Bag tabs " +
+            "(A− / A+ makes it smaller or larger). The window tells you where to go: for IVs open a Pokémon from your list, for the bag open Items (Poké Ball → Items). " +
             "Items you scroll past are remembered until you tap Reset or Stop."))
         col.addView(TextView(this).apply {
             setPadding(0, 40, 0, 0); textSize = 12f
@@ -66,6 +67,7 @@ class MainActivity : AppCompatActivity() {
 • PvP rank only compares IV spreads of the same species (level cap 50). It does not say whether the species itself is good.
 • Text recognition can misread numbers. English game language only. Bag advice is a suggestion – double-check before discarding.
 • Base stats are loaded online from pogoapi.net and kept in memory only; without internet the IV card can't work.
+• Screen images are processed on your phone and not stored or uploaded. Google's ML Kit library may send anonymous diagnostics.
 • Unofficial app, not affiliated with Niantic, Scopely or The Pokémon Company. It only reads your screen; use at your own risk."""
         })
         setContentView(ScrollView(this).apply { addView(col) })

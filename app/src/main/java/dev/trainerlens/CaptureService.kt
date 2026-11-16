@@ -8,12 +8,16 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
 import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.media.ImageReader
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
+import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -23,10 +27,12 @@ import android.view.MotionEvent
 import android.view.ViewConfiguration
 import android.view.View
 import android.view.WindowManager
-import android.widget.Button
+import android.util.DisplayMetrics
+import android.util.TypedValue
+import android.view.ViewGroup
+import android.widget.TextView
 import android.widget.FrameLayout
 import android.widget.LinearLayout
-import android.widget.ScrollView
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
@@ -105,6 +111,7 @@ class CaptureService : Service() {
                 else -> 500L                                                       // no Pokémon page on screen: don't burn battery
             }
             ivActive() -> 500L
+            ::bag.isInitialized && bag.recentlySeen(SystemClock.elapsedRealtime()) -> 400L // scrolling the Items list: don't miss rows
             else -> 1000L
         }
         main.postDelayed(scanTask, delay)
@@ -121,10 +128,19 @@ class CaptureService : Service() {
         try {
             val p = img.planes[0]
             val pad = (p.rowStride - p.pixelStride * img.width) / p.pixelStride
-            val full = Bitmap.createBitmap(img.width + pad, img.height, Bitmap.Config.ARGB_8888)
-            full.copyPixelsFromBuffer(p.buffer)
-            bmp = if (pad == 0) full else Bitmap.createBitmap(full, 0, 0, img.width, img.height).also { full.recycle() }
+            // Two bitmaps are reused for every frame (one scan runs at a time), instead of allocating ~22 MB per scan.
+            val rw = img.width + pad
+            val raw = rawBmp?.takeIf { it.width == rw && it.height == img.height }
+                ?: Bitmap.createBitmap(rw, img.height, Bitmap.Config.ARGB_8888).also { rawBmp?.recycle(); rawBmp = it }
+            raw.copyPixelsFromBuffer(p.buffer)
+            bmp = if (pad == 0) raw else {
+                val f = frameBmp?.takeIf { it.width == img.width && it.height == img.height }
+                    ?: Bitmap.createBitmap(img.width, img.height, Bitmap.Config.ARGB_8888).also { frameBmp?.recycle(); frameBmp = it }
+                Canvas(f).drawBitmap(raw, 0f, 0f, copyPaint) // a copy we can paint on, without the padding columns
+                f
+            }
         } finally { img.close() }
+        try { maskOverlay(bmp) } catch (e: Exception) { Diag.line = "mask failed: $e" }
         val t0 = SystemClock.elapsedRealtime()
         recognizer.process(InputImage.fromBitmap(bmp, 0))
             .addOnSuccessListener { text ->
@@ -135,6 +151,7 @@ class CaptureService : Service() {
                 bag.onTokens(tokens, screenH) // always runs, so the session remembers items even with the panel closed
                 if (ivActive()) {
                     // heavy IV work off the main thread; the bitmap is released when it's done
+                    iv.onItemsScreen = bag.recentlySeen(SystemClock.elapsedRealtime())
                     worker.execute {
                         try { iv.onFrame(tokens, bmp, screenH, SystemClock.elapsedRealtime(), ocrMs) }
                         catch (e: Exception) { /* a bad frame must never stop the scan loop */ }
@@ -145,95 +162,208 @@ class CaptureService : Service() {
             .addOnFailureListener { frameDone(bmp) }
     }
 
-    private fun frameDone(bmp: Bitmap) { bmp.recycle(); scheduleNext() }
+    private fun frameDone(@Suppress("UNUSED_PARAMETER") bmp: Bitmap) { scheduleNext() } // the bitmaps are reused, not recycled
 
     private enum class Tab { BAG, IV }
     private var tab: Tab? = null
 
+    private lateinit var lp: WindowManager.LayoutParams
+    private lateinit var bubbleView: View
+    private lateinit var panelView: View
+    private lateinit var contentFrame: FrameLayout
+    private lateinit var tabIv: TextView
+    private lateinit var tabBag: TextView
+    private val bubblePos = IntArray(2)
+    private val panelPos = IntArray(2)
+    private var panelPlaced = false
+    private var panelW = 0
+    private var bubbleSize = 0
+    private val maskPaint = Paint().apply { color = Color.BLACK }
+    private var small = false
+    private lateinit var sizeBtn: TextView
+    private val copyPaint = Paint().apply { xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC) }
+    private var rawBmp: Bitmap? = null
+    private var frameBmp: Bitmap? = null
+
     /**
-     * One floating window: a draggable 🔍 bubble plus a panel with two tabs (🎒 Bag, 📊 IV).
-     * Drag the bubble anywhere; tap it to open or close the panel. A feature's info shows only when its tab is open.
+     * One floating window with two states, both of fixed size: a 🔍 bubble, or a frosted-glass panel with an IV / Bag
+     * switch. The bubble and the panel each remember their own position, so opening and closing never moves things.
+     * Drag the bubble, or the top bar of the panel, to move it.
      */
     private fun setupMenu() {
+        val svc = this
         val m = resources.displayMetrics
-        val dp = m.density
-        val lp = WindowManager.LayoutParams(
+        fun dp(v: Int) = Ui.dp(svc, v)
+        panelW = OverlayLayout.panelWidthPx(m.widthPixels, m.density)
+        bubbleSize = dp(52)
+        bubblePos[0] = m.widthPixels - bubbleSize - dp(8); bubblePos[1] = dp(160)
+        // the panel opens below the CP line and above the HP / type lines, where it hides nothing the IV checker reads
+        small = runCatching { getSharedPreferences("lens", MODE_PRIVATE).getBoolean("small", false) }.getOrDefault(false)
+        val r0 = OverlayLayout.panelRect(m.widthPixels, m.heightPixels, m.density,
+            if (small) WindowSize.SMALL else WindowSize.LARGE)
+        panelPos[0] = r0.left; panelPos[1] = r0.top; panelPlaced = true
+
+        lp = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE, PixelFormat.TRANSLUCENT
-        ).apply { gravity = Gravity.TOP or Gravity.START; x = m.widthPixels - (72 * dp).toInt(); y = (160 * dp).toInt() }
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL, PixelFormat.TRANSLUCENT
+        ).apply { gravity = Gravity.TOP or Gravity.START; x = bubblePos[0]; y = bubblePos[1] }
 
-        val content = FrameLayout(this)
-        val scroll = MaxHeightScrollView(this, (m.heightPixels * 0.55).toInt()).apply { addView(content) }
-        lateinit var bagBtn: Button
-        lateinit var ivBtn: Button
-        val panel = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL; setPadding(16, 16, 16, 16)
-            setBackgroundColor(0xEE202020.toInt()); visibility = View.GONE
-            minimumWidth = (260 * dp).toInt()
+        val bubble = TextView(this).apply {
+            text = "🔍"; setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f); gravity = Gravity.CENTER
+            background = Ui.rounded(svc, Ui.GLASS, 26f, Ui.GLASS_STROKE)
         }
-        fun select(t: Tab) {
-            tab = t
-            content.removeAllViews()
-            content.addView(if (t == Tab.BAG) bag.panel else iv.panel)
-            bagBtn.alpha = if (t == Tab.BAG) 1f else 0.5f
-            ivBtn.alpha = if (t == Tab.IV) 1f else 0.5f
-        }
-        bagBtn = Button(this).apply { text = "🎒 Bag"; setOnClickListener { select(Tab.BAG) } }
-        ivBtn = Button(this).apply { text = "📊 IV"; setOnClickListener { select(Tab.IV) } }
-        val stopBtn = Button(this).apply { text = "■ Stop"; setOnClickListener { stopSelf() } }
-        panel.addView(LinearLayout(this).apply {
+        bubbleView = bubble
+
+        // top bar: IV | Bag switch, drag area, minimise, stop
+        fun tabLabel(t: String) = Ui.label(svc, 13f, Ui.TEXT2, bold = true, gravity = Gravity.CENTER).apply { text = t; isClickable = true }
+        tabIv = tabLabel("IV").apply { setOnClickListener { select(Tab.IV) } }
+        tabBag = tabLabel("Bag").apply { setOnClickListener { select(Tab.BAG) } }
+        val seg = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            addView(bagBtn); addView(ivBtn); addView(stopBtn)
-        })
-        panel.addView(scroll)
+            background = Ui.rounded(svc, Ui.CHIP, 11f)
+            setPadding(dp(2), dp(2), dp(2), dp(2))
+            addView(tabIv, LinearLayout.LayoutParams(dp(46), dp(Metrics.TOP_BAR - 4)))
+            addView(tabBag, LinearLayout.LayoutParams(dp(46), dp(Metrics.TOP_BAR - 4)))
+        }
+        val dragArea = FrameLayout(this).apply {
+            addView(View(svc).apply { background = Ui.rounded(svc, Ui.CHIP_ACTIVE, 2f) }, FrameLayout.LayoutParams(dp(28), dp(4), Gravity.CENTER))
+        }
+        sizeBtn = Ui.button(svc, "", 4) { toggleSize() }
+        val topBar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            addView(seg)
+            addView(dragArea, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
+            addView(sizeBtn, LinearLayout.LayoutParams(dp(34), dp(Metrics.TOP_BAR)).apply { marginEnd = dp(5) })
+            addView(Ui.button(svc, "–", 4) { setExpanded(false) }, LinearLayout.LayoutParams(dp(34), dp(Metrics.TOP_BAR)).apply { marginEnd = dp(5) })
+            addView(Ui.button(svc, "Stop", 4) { stopSelf() }, LinearLayout.LayoutParams(dp(46), dp(Metrics.TOP_BAR)))
+        }
 
-        val bubble = Button(this).apply { text = "🔍" }
-        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; addView(bubble); addView(panel) }
+        contentFrame = FrameLayout(this).apply {
+            background = Ui.rounded(svc, Ui.WELL, 16f)
+            setPadding(dp(Metrics.CONTENT_PAD), dp(Metrics.CONTENT_PAD), dp(Metrics.CONTENT_PAD), dp(Metrics.CONTENT_PAD))
+        }
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = Ui.rounded(svc, Ui.GLASS, 22f, Ui.GLASS_STROKE)
+            setPadding(dp(Metrics.WINDOW_PAD), dp(Metrics.WINDOW_PAD), dp(Metrics.WINDOW_PAD), dp(Metrics.WINDOW_PAD))
+            addView(topBar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(Metrics.TOP_BAR)))
+            addView(contentFrame, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(Metrics.CONTENT_H)).apply { topMargin = dp(Metrics.GAP) })
+            visibility = View.GONE
+        }
+        panelView = panel
+        applySize()
 
+        val box = FrameLayout(this).apply {
+            addView(bubble, FrameLayout.LayoutParams(bubbleSize, bubbleSize))
+            addView(panel, FrameLayout.LayoutParams(panelW, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
+        menuRoot = box
+        makeDraggable(bubble, bubblePos) { setExpanded(true) }
+        makeDraggable(topBar, panelPos, null)
+        select(Tab.IV)
+        wm.addView(box, lp)
+    }
+
+    private fun select(t: Tab) {
+        tab = t
+        contentFrame.removeAllViews()
+        contentFrame.addView(if (t == Tab.BAG) bag.panel else iv.panel,
+            FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        styleTab(tabIv, t == Tab.IV); styleTab(tabBag, t == Tab.BAG)
+    }
+
+    private fun styleTab(v: TextView, active: Boolean) {
+        v.setTextColor(if (active) Ui.TEXT else Ui.TEXT2)
+        v.background = if (active) Ui.rounded(this, Ui.CHIP_ACTIVE, 9f) else null
+    }
+
+    private fun setExpanded(open: Boolean) {
+        panelOpen = open
+        bubbleView.visibility = if (open) View.GONE else View.VISIBLE
+        panelView.visibility = if (open) View.VISIBLE else View.GONE
+        applySize()
+        val pos = if (open) panelPos else bubblePos
+        lp.x = pos[0]; lp.y = pos[1]
+        menuRoot?.let { b ->
+            runCatching { wm.updateViewLayout(b, lp) }
+            b.post { place(pos) } // keep it on screen once the new size is known
+        }
+    }
+
+    /**
+     * The panel is drawn at [WindowSize] scale, and the window is given exactly that footprint (not wrap-content), so
+     * the touch area, the on-screen clamp and the black-out mask all match what is visible.
+     */
+    private fun applySize() {
+        val s = if (small) WindowSize.SMALL else WindowSize.LARGE
+        panelView.pivotX = 0f; panelView.pivotY = 0f; panelView.scaleX = s; panelView.scaleY = s
+        sizeBtn.text = if (small) "A+" else "A−"
+        if (panelOpen) { lp.width = (panelW * s).toInt(); lp.height = (Ui.dp(this, Metrics.PANEL_H) * s).toInt() }
+        else { lp.width = bubbleSize; lp.height = bubbleSize }
+    }
+
+    private fun toggleSize() {
+        small = !small
+        runCatching { getSharedPreferences("lens", MODE_PRIVATE).edit().putBoolean("small", small).apply() }
+        applySize()
+        menuRoot?.let { b -> runCatching { wm.updateViewLayout(b, lp) }; b.post { place(panelPos) } }
+    }
+
+    /** Moves the window to [pos] (clamped to the screen) and remembers the clamped value. */
+    private fun place(pos: IntArray) {
+        val b = menuRoot ?: return
+        val m = resources.displayMetrics
+        pos[0] = pos[0].coerceIn(0, maxOf(0, m.widthPixels - b.width))
+        pos[1] = pos[1].coerceIn(0, maxOf(0, m.heightPixels - b.height))
+        lp.x = pos[0]; lp.y = pos[1]
+        runCatching { wm.updateViewLayout(b, lp) }
+    }
+
+    private fun makeDraggable(handle: View, pos: IntArray, onTap: (() -> Unit)?) {
         val slop = ViewConfiguration.get(this).scaledTouchSlop
-        var downX = 0f; var downY = 0f; var startX = 0; var startY = 0; var dragging = false
-        bubble.setOnTouchListener { _, e ->
+        var downX = 0f; var downY = 0f; var startX = 0; var startY = 0; var moved = false
+        handle.setOnTouchListener { _, e ->
             when (e.actionMasked) {
-                MotionEvent.ACTION_DOWN -> { downX = e.rawX; downY = e.rawY; startX = lp.x; startY = lp.y; dragging = false; true }
+                MotionEvent.ACTION_DOWN -> { downX = e.rawX; downY = e.rawY; startX = pos[0]; startY = pos[1]; moved = false; true }
                 MotionEvent.ACTION_MOVE -> {
                     val dx = e.rawX - downX; val dy = e.rawY - downY
-                    if (!dragging && (abs(dx) > slop || abs(dy) > slop)) dragging = true
-                    if (dragging) {
-                        lp.x = (startX + dx).toInt().coerceIn(0, (m.widthPixels - box.width).coerceAtLeast(0))
-                        lp.y = (startY + dy).toInt().coerceIn(0, (m.heightPixels - bubble.height).coerceAtLeast(0))
-                        wm.updateViewLayout(box, lp)
-                    }
+                    if (!moved && (abs(dx) > slop || abs(dy) > slop)) moved = true
+                    if (moved) { pos[0] = startX + dx.toInt(); pos[1] = startY + dy.toInt(); place(pos) }
                     true
                 }
-                MotionEvent.ACTION_UP -> {
-                    if (!dragging) {
-                        val open = panel.visibility != View.VISIBLE
-                        panel.visibility = if (open) View.VISIBLE else View.GONE
-                        panelOpen = open
-                        if (open && tab == null) select(Tab.BAG)
-                        // keep the opened panel on screen
-                        box.post {
-                            lp.x = lp.x.coerceIn(0, (m.widthPixels - box.width).coerceAtLeast(0))
-                            lp.y = lp.y.coerceIn(0, (m.heightPixels - box.height).coerceAtLeast(0))
-                            runCatching { wm.updateViewLayout(box, lp) }
-                        }
-                    }
-                    true
-                }
-                else -> false
+                MotionEvent.ACTION_UP -> { if (!moved) onTap?.invoke(); true }
+                else -> true
             }
         }
-        wm.addView(box, lp)
-        menuRoot = box
     }
 
-    /** A ScrollView that never grows taller than [maxH] pixels. */
-    private class MaxHeightScrollView(ctx: Context, private val maxH: Int) : ScrollView(ctx) {
-        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-            super.onMeasure(widthMeasureSpec, View.MeasureSpec.makeMeasureSpec(maxH, View.MeasureSpec.AT_MOST))
-        }
+    /**
+     * The overlay is part of the screen capture. Paint it black before reading the frame, so its own text ("CP 3259",
+     * "Poké Ball −34", the ATK / DEF / HP bars) is never mistaken for the game's.
+     */
+    private fun maskOverlay(bmp: Bitmap) {
+        val b = menuRoot ?: return
+        if (b.width == 0 || b.height == 0 || !b.isAttachedToWindow) return
+        val loc = IntArray(2)
+        b.getLocationOnScreen(loc)
+        val win = Box(loc[0], loc[1], loc[0] + b.width, loc[1] + b.height)
+        val (rw, rh) = realDisplaySize()
+        val r = OverlayMask.map(win, rw, rh, bmp.width, bmp.height, Ui.dp(this, 3))
+        Canvas(bmp).drawRect(r.left.toFloat(), r.top.toFloat(), r.right.toFloat(), r.bottom.toFloat(), maskPaint)
+        val m = resources.displayMetrics
+        Diag.line = "window=${win.left},${win.top},${win.right},${win.bottom} mask=${r.left},${r.top},${r.right},${r.bottom} " +
+            "bitmap=${bmp.width}x${bmp.height} realDisplay=${rw}x$rh metrics=${m.widthPixels}x${m.heightPixels} density=${m.density}"
     }
+
+    /** Full size of the display, including the system bars (the app's display metrics can leave them out). */
+    private fun realDisplaySize(): Pair<Int, Int> =
+        if (Build.VERSION.SDK_INT >= 30) wm.maximumWindowMetrics.bounds.let { it.width() to it.height() }
+        else {
+            val dm = DisplayMetrics()
+            @Suppress("DEPRECATION") wm.defaultDisplay.getRealMetrics(dm)
+            dm.widthPixels to dm.heightPixels
+        }
 
     override fun onDestroy() {
         destroyed = true
@@ -241,6 +371,7 @@ class CaptureService : Service() {
         worker.shutdown()
         menuRoot?.let { runCatching { wm.removeView(it) } }
         display?.release()
+        rawBmp?.recycle(); frameBmp?.recycle(); rawBmp = null; frameBmp = null
         if (::projection.isInitialized) projection.stop()
         super.onDestroy()
     }

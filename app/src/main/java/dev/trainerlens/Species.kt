@@ -217,11 +217,53 @@ object SpeciesDb {
 
         val height = tokens.firstNotNullOfOrNull { mRx.find(it.text)?.groupValues?.get(1)?.replace(',', '.')?.toDoubleOrNull() }
         val weight = tokens.firstNotNullOfOrNull { kgRx.find(it.text)?.groupValues?.get(1)?.replace(',', '.')?.toDoubleOrNull() }
-        val caught = tokens.firstNotNullOfOrNull { t ->
-            caughtRx.find(t.text)?.groupValues?.get(1)?.let { lookup(Rules.norm(it), d) }?.takeIf { it.isNotEmpty() }
-        }.orEmpty()
+        val caught = readCaught(tokens, d)
         return Clues(names.toList(), family, typesOnScreen(tokens, screenH), height, weight, evolveCost(tokens, screenH, d),
             tokens.any { evolveRx.containsMatchIn(it.text) }, caught)
+    }
+
+    private val caughtStartRx = Regex("^\\s*(?:this|dieses|diese|dieser)\\s+(.+?)\\s*$", RegexOption.IGNORE_CASE)
+    private val wasRx = Regex("^(?:was|wurde)\\b", RegexOption.IGNORE_CASE)
+    /** Words the game puts in front of a species in the "caught" line; regional ones also pick the form. */
+    private val regionalWords = mapOf("alolan" to "alol", "alola" to "alol", "galarian" to "galar", "galar" to "galar",
+        "hisuian" to "hisui", "hisui" to "hisui", "paldean" to "palde", "paldea" to "palde")
+    private val prefixWords = setOf("mega", "shadow", "purified", "primal", "gigantamax", "dynamax")
+
+    /**
+     * The species named in "This Dragonite was caught on …". Also works when the line wrapped before "was", when a
+     * form word is in front ("Alolan Exeggutor", "Mega Charizard X") and when the OCR got one letter wrong.
+     */
+    fun readCaught(tokens: List<Token>, d: Data): List<Species> {
+        for (t in tokens) {
+            var phrase = caughtRx.find(t.text)?.groupValues?.get(1)
+            if (phrase == null) {
+                val start = caughtStartRx.find(t.text)?.groupValues?.get(1)?.takeIf { it.split(Regex("\\s+")).size <= 5 } ?: continue
+                val h = t.box.height().coerceAtLeast(1)
+                val wrapped = tokens.any { o -> o !== t && o.box.top >= t.box.top && o.box.top - t.box.bottom <= h * 2 && wasRx.containsMatchIn(o.text.trim()) }
+                if (!wrapped) continue
+                phrase = start
+            }
+            resolveCaught(phrase, d).takeIf { it.isNotEmpty() }?.let { return it }
+        }
+        return emptyList()
+    }
+
+    private fun resolveCaught(phrase: String, d: Data): List<Species> {
+        val words = phrase.trim().split(Regex("\\s+")).toMutableList()
+        var region: String? = null
+        while (words.size > 1) {
+            val w = words.first().lowercase().filter { it.isLetter() }
+            val r = regionalWords[w]
+            if (r != null) region = r else if (w !in prefixWords) break
+            words.removeAt(0)
+        }
+        val n = Rules.norm(words.joinToString(""))
+        var found = lookup(n, d)
+        if (found.isEmpty()) { // "Charizard X": a known name inside the phrase
+            d.namesLongestFirst.firstOrNull { it.length >= 5 && n.contains(it) && n.length <= it.length + 8 }?.let { found = d.byName[it]!! }
+        }
+        if (region != null) found.filter { it.form.lowercase().startsWith(region) }.takeIf { it.isNotEmpty() }?.let { found = it }
+        return found
     }
 
     /** Candy-cost number on the EVOLVE button, e.g. 25 (Dratini) or 100 (Dragonair). */
@@ -348,7 +390,7 @@ object SpeciesDb {
         d ?: return null
         // "This Dragonite was caught on …" names the species outright; types pick the form
         if (c.caught.isNotEmpty()) {
-            val forms = c.caught.flatMap { sp -> d.byName[sp.id].orEmpty() }.distinct()
+            val forms = c.caught.distinct() // all forms of the named species, or just the regional one named in the line
             val byType = if (c.types.isEmpty()) forms else forms.filter { it.types == c.types }.ifEmpty { forms.filter { it.types.containsAll(c.types) } }
             val nick = c.names.none { n -> forms.any { it.dex == n.dex } }
             return SpeciesGuess(byType.ifEmpty { forms }, nick)

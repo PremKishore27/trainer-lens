@@ -38,7 +38,7 @@ android {
         }
     }
     buildFeatures { buildConfig = true }
-    testOptions { unitTests.isReturnDefaultValues = true; unitTests.all { it.maxHeapSize = "2g"; it.testLogging { events("failed"); showStandardStreams = true; exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL } } }
+    testOptions { unitTests.isReturnDefaultValues = true; unitTests.isIncludeAndroidResources = true; unitTests.all { it.maxHeapSize = "2g"; it.testLogging { events("failed"); showStandardStreams = true; exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL } } }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
 }
@@ -47,5 +47,6 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.mlkit:text-recognition:16.0.0")
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.13") // builds the overlay views in a test, so a startup crash shows up in CI
     testImplementation("org.json:json:20240303") // real JSON parser for JVM tests (Android's is a stub there)
 }
