@@ -49,9 +49,9 @@ class OverlayTest {
     @Test fun theIvWindowIsKeptInsideTheBandAboveTheHpLine() {
         val realH = 2780; val panelH = 673
         val h = (panelH * OverlayScale.MAX).toInt()
-        val y = OverlayBand.clampY(414, h, realH)
-        assertTrue("bottom ${y + h} reaches the HP line", y + h <= OverlayBand.bottom(realH) && y + h < 1277)
-        assertTrue(y >= OverlayBand.top(realH))
+        val top = OverlayBand.clampY(414, h, realH)
+        assertTrue("bottom ${top + h} reaches the HP line", top + h <= OverlayBand.bottom(realH) && top + h < 1277)
+        assertTrue(top >= OverlayBand.top(realH))
         // and for every phone, at every size the player can pick (after the scale is limited to the band)
         for (p in phones) {
             val panelHpx = (Metrics.PANEL_H * p.density + 0.5f).toInt()
