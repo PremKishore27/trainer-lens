@@ -3,6 +3,7 @@
 [![Build APK](https://github.com/PremKishore27/trainer-lens/actions/workflows/build-apk.yml/badge.svg)](https://github.com/PremKishore27/trainer-lens/actions/workflows/build-apk.yml)
 [![Latest release](https://img.shields.io/github/v/release/PremKishore27/trainer-lens?label=latest&color=2ea043)](https://github.com/PremKishore27/trainer-lens/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/PremKishore27/trainer-lens/total?color=blue)](https://github.com/PremKishore27/trainer-lens/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 ![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)
 ![Kotlin](https://img.shields.io/badge/Kotlin-1.9-7F52FF?logo=kotlin&logoColor=white)
 
@@ -220,5 +221,7 @@ Every push builds an APK on GitHub Actions; pushes to `main` publish a new [Rele
 Bug reports, ideas and pull requests are welcome – see [CONTRIBUTING.md](CONTRIBUTING.md). Please read the [Code of Conduct](CODE_OF_CONDUCT.md) and, for security problems, [SECURITY.md](SECURITY.md).
 
 ---
+
+Code licensed under the [MIT License](LICENSE). Pokémon names and data belong to their owners (see the note below); the stats come from the community database pogoapi.net.
 
 <sub>Trainer Lens is a fan-made project and is not affiliated with, endorsed or sponsored by Niantic, Scopely, Nintendo, Creatures, GAME FREAK or The Pokémon Company. Pokémon and Pokémon GO are trademarks of their respective owners.</sub>
