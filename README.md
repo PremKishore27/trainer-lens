@@ -108,6 +108,8 @@ Keep limits and rarity are in [`Rules.kt`](app/src/main/java/dev/trainerlens/Rul
 
 ### 📊 IV checker
 Tap 🔍 → **📊 IV**, then open a Pokémon. The window opens in the free band between the CP line and the HP line, so it hides nothing the app reads; drag it by its top bar if you want it elsewhere.
+The **A− / A+** button in the top bar switches the window between a larger and a smaller size (it remembers your choice).
+**Renamed Pokémon:** if the card says *Can't tell which Pokémon this is*, open ☰ → **Appraise** in the game. The app reads the *"This … was caught on …"* line of that screen (also "Alolan Exeggutor" style names) and identifies the Pokémon by itself.
 If it covers the Pokémon's HP / name / type lines, the card says **Can't read the HP line** – drag the window up or down. For the **exact** result, appraise it in-game (☰ → Appraise) and keep the bars on screen for a second.
 The card shows:
 - **IV % out of 100** – 15/15/15 = 100 %, 12/13/13 = 38/45 = **84 %** – with the spread and a rating (Perfect / Excellent / Good / Decent / Weak).

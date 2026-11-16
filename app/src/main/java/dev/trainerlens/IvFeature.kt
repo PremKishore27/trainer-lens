@@ -78,6 +78,13 @@ class IvFeature(private val ctx: Context, private val worker: Executor) {
         // different Pokémon than the one we're showing, the card is stale: drop it instead of showing the old Pokémon
         // (and never attach this Pokémon's appraisal to the previous one).
         val hpNow = if (read == null) SummaryParser.hp(tokens) else read.hp
+        // The appraisal dialog hides the CP but not the "This X was caught on …" line, which names the Pokémon. Use it
+        // for the Pokémon we couldn't identify (renamed, or a regional form), and keep that Pokémon alive meanwhile.
+        if (read == null && hpNow != null && tracker.knowsHp(hpNow)) {
+            lastSeen = now
+            val caught = SpeciesDb.get()?.let { SpeciesDb.readCaught(tokens, it) }.orEmpty()
+            if (caught.isNotEmpty() && tracker.observeCaught(hpNow, Clues(caught = caught))) changed = true
+        }
         if (read == null && hpNow != null && tracker.hpOnly(hpNow)) changed = true
         // A Pokémon page whose CP is readable but whose HP line isn't: the window is probably covering it.
         noHpFrames = if (read == null && hpNow == null && SummaryParser.hasPowerUp(tokens) && SummaryParser.cp(tokens, screenH) != null) noHpFrames + 1 else 0
@@ -125,8 +132,8 @@ class IvFeature(private val ctx: Context, private val worker: Executor) {
         if (r == null) {
             val c = m.clues()
             val why = if (SpeciesDb.candidates(c) == null && SpeciesDb.widened(c) == null)
-                "Can't tell which Pokémon this is.\nIt's renamed and no candy or type line was read.\nTap Copy log and send me the text."
-            else "No IV spread fits these numbers.\nMega or buddy-boosted, or a misread – hold still for a second."
+                "Can't tell which Pokémon this is.\nOpen ☰ → Appraise in the game:\nits \"caught on\" line names it."
+            else "No IV spread fits these numbers.\nMega, buddy-boosted or a misread.\nAppraise it in the game to name it."
             show(CardModels.message("CP ${m.cp} · HP ${m.hp}", why))
             return
         }

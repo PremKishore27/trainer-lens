@@ -38,6 +38,16 @@ class OverlayTest {
         }
     }
 
+    @Test fun bothWindowSizesStayBetweenCpAndHp() {
+        for (scale in listOf(WindowSize.SMALL, WindowSize.LARGE)) for (p in phones) {
+            val r = OverlayLayout.panelRect(p.w, p.h, p.density, scale)
+            assertTrue("scale $scale: top ${r.top} covers CP on ${p.w}x${p.h}", r.top > y(cp.bottom, p))
+            assertTrue("scale $scale: bottom ${r.bottom} covers HP on ${p.w}x${p.h}", r.bottom < y(hp.top, p))
+            assertTrue(r.left >= 0 && r.right <= p.w)
+        }
+        assertTrue(WindowSize.SMALL < 1f && WindowSize.LARGE > 1f && WindowSize.LARGE <= 1.2f)
+    }
+
     @Test fun windowMayOnlyCoverThePokemonNameOnShortScreens() {
         val p = Phone(720, 1600, 2.0f)
         val r = OverlayLayout.panelRect(p.w, p.h, p.density)

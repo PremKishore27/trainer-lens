@@ -178,6 +178,8 @@ class CaptureService : Service() {
     private var panelW = 0
     private var bubbleSize = 0
     private val maskPaint = Paint().apply { color = Color.BLACK }
+    private var small = false
+    private lateinit var sizeBtn: TextView
     private val copyPaint = Paint().apply { xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC) }
     private var rawBmp: Bitmap? = null
     private var frameBmp: Bitmap? = null
@@ -195,7 +197,9 @@ class CaptureService : Service() {
         bubbleSize = dp(52)
         bubblePos[0] = m.widthPixels - bubbleSize - dp(8); bubblePos[1] = dp(160)
         // the panel opens below the CP line and above the HP / type lines, where it hides nothing the IV checker reads
-        val r0 = OverlayLayout.panelRect(m.widthPixels, m.heightPixels, m.density)
+        small = runCatching { getSharedPreferences("lens", MODE_PRIVATE).getBoolean("small", false) }.getOrDefault(false)
+        val r0 = OverlayLayout.panelRect(m.widthPixels, m.heightPixels, m.density,
+            if (small) WindowSize.SMALL else WindowSize.LARGE)
         panelPos[0] = r0.left; panelPos[1] = r0.top; panelPlaced = true
 
         lp = WindowManager.LayoutParams(
@@ -224,10 +228,12 @@ class CaptureService : Service() {
         val dragArea = FrameLayout(this).apply {
             addView(View(svc).apply { background = Ui.rounded(svc, Ui.CHIP_ACTIVE, 2f) }, FrameLayout.LayoutParams(dp(28), dp(4), Gravity.CENTER))
         }
+        sizeBtn = Ui.button(svc, "", 4) { toggleSize() }
         val topBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
             addView(seg)
             addView(dragArea, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
+            addView(sizeBtn, LinearLayout.LayoutParams(dp(34), dp(Metrics.TOP_BAR)).apply { marginEnd = dp(5) })
             addView(Ui.button(svc, "–", 4) { setExpanded(false) }, LinearLayout.LayoutParams(dp(34), dp(Metrics.TOP_BAR)).apply { marginEnd = dp(5) })
             addView(Ui.button(svc, "Stop", 4) { stopSelf() }, LinearLayout.LayoutParams(dp(46), dp(Metrics.TOP_BAR)))
         }
@@ -245,6 +251,7 @@ class CaptureService : Service() {
             visibility = View.GONE
         }
         panelView = panel
+        applySize()
 
         val box = FrameLayout(this).apply {
             addView(bubble, FrameLayout.LayoutParams(bubbleSize, bubbleSize))
@@ -274,12 +281,32 @@ class CaptureService : Service() {
         panelOpen = open
         bubbleView.visibility = if (open) View.GONE else View.VISIBLE
         panelView.visibility = if (open) View.VISIBLE else View.GONE
+        applySize()
         val pos = if (open) panelPos else bubblePos
         lp.x = pos[0]; lp.y = pos[1]
         menuRoot?.let { b ->
             runCatching { wm.updateViewLayout(b, lp) }
             b.post { place(pos) } // keep it on screen once the new size is known
         }
+    }
+
+    /**
+     * The panel is drawn at [WindowSize] scale, and the window is given exactly that footprint (not wrap-content), so
+     * the touch area, the on-screen clamp and the black-out mask all match what is visible.
+     */
+    private fun applySize() {
+        val s = if (small) WindowSize.SMALL else WindowSize.LARGE
+        panelView.pivotX = 0f; panelView.pivotY = 0f; panelView.scaleX = s; panelView.scaleY = s
+        sizeBtn.text = if (small) "A+" else "A−"
+        if (panelOpen) { lp.width = (panelW * s).toInt(); lp.height = (Ui.dp(this, Metrics.PANEL_H) * s).toInt() }
+        else { lp.width = bubbleSize; lp.height = bubbleSize }
+    }
+
+    private fun toggleSize() {
+        small = !small
+        runCatching { getSharedPreferences("lens", MODE_PRIVATE).edit().putBoolean("small", small).apply() }
+        applySize()
+        menuRoot?.let { b -> runCatching { wm.updateViewLayout(b, lp) }; b.post { place(panelPos) } }
     }
 
     /** Moves the window to [pos] (clamped to the screen) and remembers the clamped value. */

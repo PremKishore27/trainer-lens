@@ -39,6 +39,12 @@ object Metrics {
     const val BAG_LIST = INNER_H - BAG_FIXED
 }
 
+/** The two window sizes the size button switches between (the layout is designed at 1.0). */
+object WindowSize {
+    const val SMALL = 0.8f
+    const val LARGE = 1.1f
+}
+
 object OverlayLayout {
     /**
      * The window opens just below the CP line (CP is printed at about 5-9 % of the screen height) and ends above the
@@ -51,11 +57,12 @@ object OverlayLayout {
 
     fun panelHeightPx(density: Float): Int = (Metrics.PANEL_H * density + 0.5f).toInt()
 
-    fun panelRect(screenW: Int, screenH: Int, density: Float): Box {
-        val w = panelWidthPx(screenW, density)
+    /** The window's footprint on screen at [scale]: what the mask and the on-screen clamp must use. */
+    fun panelRect(screenW: Int, screenH: Int, density: Float, scale: Float = 1f): Box {
+        val w = (panelWidthPx(screenW, density) * scale).toInt()
         val left = ((screenW - w) / 2).coerceAtLeast(0)
         val top = panelTop(screenH)
-        return Box(left, top, left + w, top + panelHeightPx(density))
+        return Box(left, top, left + w, top + (panelHeightPx(density) * scale).toInt())
     }
 }
 
