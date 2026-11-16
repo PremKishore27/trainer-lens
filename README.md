@@ -217,6 +217,10 @@ Every push builds an APK on GitHub Actions; pushes to `main` publish a new [Rele
 
 ---
 
+## Support
+
+Trainer Lens is free and always will be. If it helps you, you can [buy me a coffee on Ko-fi](https://ko-fi.com/premboii) ☕ – never required, and no features are locked behind it.
+
 ## License
 
 [MIT](LICENSE) – free to use, copy and modify. The Pokémon names, data and trademarks belong to their owners (see the note below).
