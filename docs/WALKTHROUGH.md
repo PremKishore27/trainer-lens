@@ -1,6 +1,6 @@
 # Trainer Lens – step-by-step walkthrough
 
-For someone who has never used it. Takes about 5 minutes the first time. Every picture here is a **drawn illustration** of the screen (your phone's wording and colours may differ a little); no game artwork is used.
+For someone who has never used it. Takes about 5 minutes the first time. The pictures of the Android settings screens are **drawn illustrations** (your phone's wording and colours may differ a little). The pictures of the overlay in the game are **real screenshots** with the numbers explained under them; the place in the "caught on" line is hidden.
 
 **You need:** an Android phone (Android 8.0 or newer) with Pokémon GO installed.
 
@@ -69,7 +69,7 @@ Tap **5 · Start session**. Android asks to record the screen: pick **Entire scr
 - **Tap** it to open the window. It has two tabs: **IV** and **Bag**.
 - **–** shrinks it back to the bubble. **Stop** ends the session (to use it again, open Trainer Lens and tap Start session).
 
-![The bubble over the game](img/06-bubble.svg)
+![The bubble over the game](img/shots/01-bubble.png)
 
 ### Move and resize
 - Drag the **top bar** to move the window.
@@ -88,7 +88,7 @@ Tap **5 · Start session**. Android asks to record the screen: pick **Entire scr
 3. Within a second or two the card shows: **IV %**, Attack / Defense / HP, level, and the rank for the **Little / Great / Ultra / Master** leagues.
 4. **Keep the window away from the CP line (top) and the HP line (middle).** The app places it in the free space by itself; if you move it onto those lines, the card says *Can't read the HP line* – just drag it up or down.
 
-![IV card](img/07-iv-card.svg)
+![IV card](img/shots/03-iv-estimate.png)
 
 **How to read it:** a green ring means a great Pokémon (top-100 PvP rank or ≥ 91 %), amber is decent, red is weak. **✓** in a league row = a top-100 spread, **?** = maybe, **✗** = not good, *CP too high* = already above that league's limit.
 
@@ -101,7 +101,7 @@ Without an appraisal the app estimates and may show a range like *84–96 %*. Fo
 
 This also fixes **renamed Pokémon**: the game's "This … was caught on …" line names the Pokémon and the app reads it.
 
-![Appraise](img/08-appraise.svg)
+![Appraise](img/shots/04-iv-exact.png)
 
 ### Bag tab – what can I throw away?
 1. Tap the bubble, choose the **Bag** tab.
@@ -113,7 +113,7 @@ This also fixes **renamed Pokémon**: the game's "This … was caught on …" li
    - **Bag full?** It lists exactly what to discard to free up space, common items first.
    - **Free more (+10)** aims for 10 more free slots. **Reset** starts the list over.
 
-![Bag tab](img/09-bag-tab.svg)
+![Bag tab](img/shots/07-bag-advice.png)
 
 > The advice is a **suggestion**. Double-check before you discard anything.
 
