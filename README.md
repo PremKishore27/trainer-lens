@@ -5,19 +5,19 @@
 [![Downloads](https://img.shields.io/github/downloads/PremKishore27/trainer-lens/total?color=blue)](https://github.com/PremKishore27/trainer-lens/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 ![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)
-[![License: MIT](https://img.shields.io/github/license/PremKishore27/trainer-lens?color=blue)](LICENSE)
 ![Kotlin](https://img.shields.io/badge/Kotlin-1.9-7F52FF?logo=kotlin&logoColor=white)
 
-**A screen-reading helper overlay for Pokémon GO on Android.**
-It watches your screen with on-device text recognition and shows a small card with useful info on top of the game:
-how to clean up your **item bag**, and the **IVs and PvP rank** of any Pokémon you open.
+**Check any Pokémon's IVs and PvP rank, and see what to throw out of your bag – without leaving Pokémon GO.**
+A small movable window floats on top of the game and reads your screen with on-device text recognition.
 
-> 🛡️ **Read-only by design.** Trainer Lens never taps, swipes, injects input, or talks to the game's servers.
-> It only *looks* at the screen – like a friend looking over your shoulder.
+- 📊 **IV checker** – open a Pokémon: IV %, Attack / Defense / HP, level and Great / Ultra / Master League rank. Appraise it for exact numbers.
+- 🎒 **Bag advisor** – scroll your Items once and it tells you what you can discard, and what to keep.
+- 🛡️ **Read-only and private** – it never taps, swipes or talks to the game's servers, and your screen is processed on your phone and thrown away. No account, no ads, free.
 
 ### ⬇️ [Download the latest APK](https://github.com/PremKishore27/trainer-lens/releases/latest/download/TrainerLens.apk)
 
-Android 8.0+ · free · no account · [step-by-step install guide](#install) · [what's new](CHANGELOG.md)
+Android 8.0+ · free · open source (MIT) · [step-by-step install guide](#install) · [what's new](CHANGELOG.md)
+<sub>💬 Questions or ideas? [Open an issue](https://github.com/PremKishore27/trainer-lens/issues/new/choose) · ☕ [Support on Ko-fi](https://ko-fi.com/premboii) · 🤖 [Built with AI assistance](#about-this-project)</sub>
 
 **New here?** Follow the **[step-by-step walkthrough with pictures](docs/WALKTHROUGH.md)**.
 
@@ -217,6 +217,10 @@ Every push builds an APK on GitHub Actions; pushes to `main` publish a new [Rele
 - [ ] Stickers & more languages
 
 ---
+
+## About this project
+
+Trainer Lens is made by one person, [PremKishore27](https://github.com/PremKishore27), in their free time. **It is developed with the help of an AI assistant, Claude (by Anthropic):** the AI writes much of the code, tests and documentation under my direction. I decide what the app does, try every build on my own phone, and choose what gets released. Automated tests (including one case for every Pokémon form) run on each change. If you find a bug, please [open an issue](https://github.com/PremKishore27/trainer-lens/issues/new/choose).
 
 ## Support
 
