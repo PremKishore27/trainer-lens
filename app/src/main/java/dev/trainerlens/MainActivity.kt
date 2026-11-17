@@ -47,8 +47,8 @@ class MainActivity : AppCompatActivity() {
 
         val actions = listOf<() -> Unit>(
             { if (Build.VERSION.SDK_INT >= 33) notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) },
-            { startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))) },
             { startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))) },
+            { startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))) },
             { startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName"))) },
         )
         val badgeIds = listOf(R.id.badge1, R.id.badge2, R.id.badge3, R.id.badge4)
@@ -71,20 +71,20 @@ class MainActivity : AppCompatActivity() {
         try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } catch (_: ActivityNotFoundException) { }
     }
 
-    /** Steps 1, 3 and 4 can be checked, so they show a tick once allowed. Step 2 can't be detected. */
+    /** Steps 1, 2 and 4 can be checked. Step 3 (restricted settings) can't be detected; it is done once step 2 is. */
     private fun refresh() {
         val notif = Build.VERSION.SDK_INT < 33 ||
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
         val overlay = Settings.canDrawOverlays(this)
         val battery = (getSystemService(Context.POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(packageName)
-        val done = listOf(notif, false, overlay, battery)
+        val done = listOf(notif, overlay, overlay, battery)
         for (i in 0 until 4) {
             badges[i].text = if (done[i]) "✓" else "${i + 1}"
-            buttons[i].text = if (done[i]) "Done" else buttonLabels[i]
+            buttons[i].text = if (done[i]) (if (i == 2) "Not needed" else "Done") else buttonLabels[i]
             buttons[i].isEnabled = !done[i]
         }
         startHint.text = if (overlay) "Android asks to record the screen: choose \"Entire screen\"."
-        else "First allow step 3 (display over other apps), then tap Start."
+        else "First allow step 2 (display over other apps), then tap Start."
     }
 
     private fun start() {

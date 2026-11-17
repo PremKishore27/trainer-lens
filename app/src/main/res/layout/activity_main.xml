@@ -80,18 +80,18 @@
                     android:layout_marginStart="14dp" android:orientation="vertical">
                     <TextView
                         android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:text="Allow restricted settings" android:textAppearance="?attr/textAppearanceTitleSmall"
+                        android:text="Display over other apps" android:textAppearance="?attr/textAppearanceTitleSmall"
                         android:textColor="?attr/colorOnSurface" />
                     <TextView
                         android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:layout_marginTop="2dp" android:text="Android 13+: App info → ⋮ (top right) → Allow restricted settings. Needed before step 3. No ⋮ option? Tap step 3 once first, then come back."
+                        android:layout_marginTop="2dp" android:text="Lets the 🔍 bubble sit on top of the game. Tap Allow, pick Trainer Lens and switch it on.\n\nAndroid says \&quot;Restricted setting\&quot;, or the switch is greyed out? Tap OK, come back here and do step 3, then try this step again."
                         android:textAppearance="?attr/textAppearanceBodySmall"
                         android:textColor="?attr/colorOnSurfaceVariant" />
                 </LinearLayout>
                 <com.google.android.material.button.MaterialButton android:id="@+id/step2"
                     style="@style/Widget.Material3.Button.TonalButton"
                     android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp" android:text="Open App info" />
+                    android:layout_marginStart="8dp" android:text="Allow" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
@@ -112,18 +112,18 @@
                     android:layout_marginStart="14dp" android:orientation="vertical">
                     <TextView
                         android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:text="Display over other apps" android:textAppearance="?attr/textAppearanceTitleSmall"
+                        android:text="Only if step 2 was blocked" android:textAppearance="?attr/textAppearanceTitleSmall"
                         android:textColor="?attr/colorOnSurface" />
                     <TextView
                         android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:layout_marginTop="2dp" android:text="Lets the 🔍 bubble sit on top of the game."
+                        android:layout_marginTop="2dp" android:text="Android 13+ blocks apps installed outside the Play Store until you allow it:\n1. Tap Open App info.\n2. Tap ⋮ (three dots, top right).\n3. Tap Allow restricted settings and confirm with your PIN or fingerprint.\n4. Come back here and tap Allow in step 2 again.\n\nNo ⋮ option? Do step 2 first (the message it shows makes the option appear), then come back to this step."
                         android:textAppearance="?attr/textAppearanceBodySmall"
                         android:textColor="?attr/colorOnSurfaceVariant" />
                 </LinearLayout>
                 <com.google.android.material.button.MaterialButton android:id="@+id/step3"
                     style="@style/Widget.Material3.Button.TonalButton"
                     android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp" android:text="Allow" />
+                    android:layout_marginStart="8dp" android:text="Open App info" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
