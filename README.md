@@ -19,7 +19,20 @@ A small movable window floats on top of the game and reads your screen with on-d
 Android 8.0+ · free · open source (MIT) · [step-by-step install guide](#install) · [what's new](CHANGELOG.md)
 <sub>💬 Questions or ideas? [Open an issue](https://github.com/PremKishore27/trainer-lens/issues/new/choose) · ☕ [Support on Ko-fi](https://ko-fi.com/premboii) · 🤖 [Built with AI assistance](#about-this-project)</sub>
 
-**New here?** Follow the **[step-by-step walkthrough with pictures](docs/WALKTHROUGH.md)**.
+### See how it works
+
+<table>
+<tr>
+<td align="center" width="25%"><img src="docs/img/06-bubble.svg" alt="The bubble on top of the game"><br><sub><b>1.</b> Drag the 🔍 bubble, tap to open</sub></td>
+<td align="center" width="25%"><img src="docs/img/07-iv-card.svg" alt="IV card"><br><sub><b>2.</b> Open a Pokémon: IV and PvP card</sub></td>
+<td align="center" width="25%"><img src="docs/img/08-appraise.svg" alt="Appraise for exact IVs"><br><sub><b>3.</b> Appraise for exact IVs</sub></td>
+<td align="center" width="25%"><img src="docs/img/09-bag-tab.svg" alt="Bag advisor"><br><sub><b>4.</b> Bag: what to discard</sub></td>
+</tr>
+</table>
+
+<sub>These are drawn illustrations of the screens, not real screenshots (no game artwork is used). Real screenshots are coming.</sub>
+
+**New here?** Follow the **[step-by-step walkthrough with pictures](docs/WALKTHROUGH.md)** – every setup tap explained, including the *Restricted setting* trap.
 
 **Jump to:** [Features](#features) · [Install](#install) · [Using it](#using-it) · [Troubleshooting](#troubleshooting) · [Privacy](#privacy--permissions) · [FAQ](#faq) · [Build from source](#build-from-source) · [Contributing](#contributing)
 
