@@ -5,6 +5,7 @@ Newest first. The latest build is always on the [Releases](https://github.com/Pr
 ## Unreleased → next release
 
 ### Added
+- **Step-by-step walkthrough with pictures** ([docs/WALKTHROUGH.md](docs/WALKTHROUGH.md)): install, setup, and how to use the IV and Bag tabs, with drawn illustrations.
 - **App icon** (a magnifying glass with IV bars, also a themed icon on Android 13+) and a status-bar icon.
 - **New setup screen** in Material 3: step cards with ticks for what is already allowed, light / dark mode, wallpaper colours on Android 12+, and a how-to card.
 - **Redesigned overlay:** one fixed-size, frosted-glass window with an IV | Bag switch. It never changes size, and you can drag it anywhere.
@@ -16,6 +17,8 @@ Newest first. The latest build is always on the [Releases](https://github.com/Pr
 - Community files: contributing guide, code of conduct, security policy, issue and pull request templates.
 
 ### Changed
+- **Appraisal-aware window:** when the in-game appraisal opens, the IV window glides up into the free band under the CP line (and shrinks if it must) so it can't cover the appraisal bars or the "caught on" line.
+- **Setup screen order:** step 2 is now *Display over other apps* and step 3 *Allow restricted settings* ("only if step 2 was blocked") with four numbered sub-steps, because the ⋮ menu entry only appears after Android has blocked step 2 once.
 - **IV window placement:** on the IV tab the window can sit above the HP line or below it and snaps away from the strip in between (so it never hides the CP or HP lines); it can no longer get stuck in the top half. Dragging is smooth: the window follows your finger anywhere, and when you let go over the strip it must not cover, it glides to the nearest spot.
 - **Types** read with one letter cut off ("DRAGON / GROUNE") now count, which helps identify renamed Pokémon.
 - **Bag:** scans about 5 times a second while the Items list is on screen (it was about 2), shows the over-limit list even when the bag size can't be read, and the Bag tab has its own window position near the bottom, so the top of the Items screen stays readable. Each tab remembers where you put its window.

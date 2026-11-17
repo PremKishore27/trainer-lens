@@ -19,6 +19,8 @@ how to clean up your **item bag**, and the **IVs and PvP rank** of any Pokémon 
 
 Android 8.0+ · free · no account · [step-by-step install guide](#install) · [what's new](CHANGELOG.md)
 
+**New here?** Follow the **[step-by-step walkthrough with pictures](docs/WALKTHROUGH.md)**.
+
 **Jump to:** [Features](#features) · [Install](#install) · [Using it](#using-it) · [Troubleshooting](#troubleshooting) · [Privacy](#privacy--permissions) · [FAQ](#faq) · [Build from source](#build-from-source) · [Contributing](#contributing)
 
 ---
@@ -65,23 +67,22 @@ Trainer Lens isn't on the Play Store, so Android shows a few extra safety prompt
 1. **Download** [`TrainerLens.apk`](https://github.com/PremKishore27/trainer-lens/releases/latest/download/TrainerLens.apk) on your phone and open it.
    If asked, allow your browser / Files app to **install unknown apps**.
 2. **Google Play Protect** may offer to scan the app → tap **Install without scanning** (or let it scan).
-3. Open Trainer Lens and tap the steps **1 → 5**:
+3. Open Trainer Lens and do the steps **in order**:
 
    | Step | What to do | Why it's needed |
    |---|---|---|
-   | 1 | Allow notifications | Android requires a notification while the screen is being read |
-   | 2 | **Allow restricted settings** – opens Trainer Lens's *App info* page. Tap **⋮ (three dots, top right)** → **Allow restricted settings** → confirm with PIN/fingerprint | Android 13+ blocks step 3 for apps not installed from the Play Store. Without this, *Display over other apps* is greyed out |
-   | 3 | Allow display over other apps | Shows the 🔍 bubble on top of the game |
+   | 1 | **Allow** notifications | Android requires a notification while the screen is being read |
+   | 2 | **Allow** *Display over other apps*: pick Trainer Lens and switch it on | Shows the 🔍 bubble on top of the game |
+   | 3 | **Only if step 2 was blocked** (it says *Restricted setting*, or the switch is greyed out): tap **OK**, go back, tap **Open App info**, tap **⋮ (three dots, top right)** → **Allow restricted settings** → confirm with PIN/fingerprint. Then do step 2 again | Android 13+ blocks step 2 for apps not installed from the Play Store |
    | 4 | Don't restrict battery *(recommended)* | Stops Android from closing the overlay |
    | 5 | **▶ Start session** → choose **Entire screen** | Lets it read the screen |
 
-   > ⚠️ **Android:** the *Allow restricted settings* option is **only** in the ⋮ menu of the app's own page:
-   > *Settings → Apps → Trainer Lens → ⋮ → Allow restricted settings*. If the option isn't there yet, tap step 3 once (Android blocks it and *then* shows the option), and come back.
+   > ⚠️ **No *Allow restricted settings* in the ⋮ menu?** The entry only appears **after** Android has blocked step 2 once. Tap **Allow** in step 2 first (you'll see *Restricted setting* → **OK**), go back, then open *Settings → Apps → Trainer Lens → ⋮* again: it's there now. With pictures: [walkthrough](docs/WALKTHROUGH.md#4-step-3--allow-restricted-settings-only-if-step-2-was-blocked).
 
 4. Switch to Pokémon GO. **Drag the 🔍 bubble** anywhere on the screen; **tap it** to open the panel with the **🎒 Bag** and **📊 IV** tabs.
 
 5. **Check that it works:** open a Pokémon's page – the **IV** card fills in within a second or two. On the **Bag** tab, open **Items** in the game.
-   Not working? See [Troubleshooting](#troubleshooting).
+   Not working? See [Troubleshooting](#troubleshooting). Full guide with pictures: **[docs/WALKTHROUGH.md](docs/WALKTHROUGH.md)**.
 
 **Updating:** install the new APK over the old one – permissions and settings stay.
 <sub>Installed a build older than v0.2.4? Uninstall it once first; it was signed with a different key.</sub>
@@ -122,7 +123,7 @@ Keep limits and rarity are in [`Rules.kt`](app/src/main/java/dev/trainerlens/Rul
 Tap 🔍 → **IV**, then open a Pokémon from your Pokémon list. The window opens in the free band between the CP line and the HP line, so it hides nothing the app reads; drag it by its top bar if you want it elsewhere.
 **Resize:** drag the thin bar along the bottom edge of the window up or down. The window grows or shrinks (width follows height) and remembers its size.
 **Renamed Pokémon:** if the card says *Can't tell which Pokémon this is*, open ☰ → **Appraise** in the game. The app reads the *"This … was caught on …"* line of that screen (also "Alolan Exeggutor" style names) and identifies the Pokémon by itself.
-If it covers the Pokémon's HP / name / type lines, the card says **Can't read the HP line** – drag the window up or down. For the **exact** result, appraise it in-game (☰ → Appraise) and keep the bars on screen for a second.
+When you open the appraisal in the game, the window moves up out of its way by itself. If it covers the Pokémon's HP / name / type lines, the card says **Can't read the HP line** – drag the window up or down. For the **exact** result, appraise it in-game (☰ → Appraise) and keep the bars on screen for a second.
 The card shows:
 - **IV % out of 100** – 15/15/15 = 100 %, 12/13/13 = 38/45 = **84 %** – with the spread and a rating (Perfect / Excellent / Good / Decent / Weak).
 - **Level**, CP and HP.
@@ -154,7 +155,7 @@ League ranks compare all 4,096 spreads of that species (#1 = best possible) – 
 | **No IV spread fits** | Wait a second (OCR may have misread), or it's a Mega / buddy-boosted Pokémon. |
 | **Loading data…** | The Pokémon stats come from the internet. Check your connection. |
 | The bubble disappeared | Android stopped the screen capture. Open Trainer Lens and tap **▶ Start session** again; step 4 (battery) helps. |
-| *Display over other apps* is greyed out | Do step 2: *App info → ⋮ → Allow restricted settings*. |
+| *Display over other apps* says **Restricted setting** or is greyed out | Tap OK, then do step 3: *App info → ⋮ → Allow restricted settings* (the entry shows up only after step 2 was blocked once), then step 2 again. |
 
 Anything else: [open an issue](https://github.com/PremKishore27/trainer-lens/issues/new/choose) and attach the **Copy log** text.
 
@@ -172,7 +173,7 @@ Anything else: [open an issue](https://github.com/PremKishore27/trainer-lens/iss
 **It says "Can't tell which Pokémon this is".** Open ☰ → **Appraise** on that Pokémon in the game; the app reads the *"This … was caught on …"* line and names it. Still stuck? Tap **Copy log** and paste it into a [GitHub issue](https://github.com/PremKishore27/trainer-lens/issues) – **first remove the "caught on … at <place>" line from the pasted text if you don't want to share where you caught it.**
 **Why does it need screen recording?** That's the only way an Android app can see what another app shows. The recording never leaves your phone.
 **The bubble disappeared.** Android may stop the screen capture after a while – open Trainer Lens and tap **▶ Start session** again. Step 4 (battery) helps.
-**"Display over other apps" is greyed out.** Do step 2: *App info → ⋮ → Allow restricted settings*.
+**"Display over other apps" says "Restricted setting" or is greyed out.** Tap OK, then do step 3: *App info → ⋮ → Allow restricted settings* (the entry appears only after step 2 was blocked once), then step 2 again.
 **"No IV spread fits".** Wait a second (OCR may have misread), or it's a Mega / buddy-boosted Pokémon.
 
 ---
