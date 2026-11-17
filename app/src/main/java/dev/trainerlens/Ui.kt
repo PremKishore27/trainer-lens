@@ -27,6 +27,12 @@ object Ui {
     val AMBER = 0xFFFBBF24.toInt()
     val RED = 0xFFF87171.toInt()
     val GREY = 0xFF9CA3AF.toInt()
+    // Soft tinted fills for the bag's pills: red = discard, green = keep (and the same tints for the IV card's league pill)
+    const val RED_FILL = 0x47F87171
+    const val RED_EDGE = 0x99F87171.toInt()
+    const val GREEN_FILL = 0x424ADE80
+    const val GREEN_EDGE = 0x994ADE80.toInt()
+    const val AMBER_FILL = 0x42FBBF24
 
     fun dp(ctx: Context, v: Int): Int = (v * ctx.resources.displayMetrics.density + 0.5f).toInt()
     fun dpf(ctx: Context, v: Float): Float = v * ctx.resources.displayMetrics.density
@@ -102,6 +108,11 @@ class RingView(ctx: Context) : View(ctx) {
     }
     private val small = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER; color = Ui.TEXT2 }
     private val rect = RectF()
+    /** Text sizes relative to the normal 56 dp ring: the compact card draws a bigger ring with bigger numbers. */
+    var bigScale = 1f
+        set(v) { field = v; invalidate() }
+    var smallScale = 1f
+        set(v) { field = v; invalidate() }
     private var fraction = 0f
     private var bigText = ""
     private var smallText = ""
@@ -121,8 +132,8 @@ class RingView(ctx: Context) : View(ctx) {
         rect.set(pad, pad, width - pad, height - pad)
         canvas.drawArc(rect, 0f, 360f, false, track)
         canvas.drawArc(rect, -90f, 360f * fraction.coerceIn(0f, 1f), false, arc)
-        big.textSize = sp(if (bigText.length > 4) 12f else 17f)
-        small.textSize = sp(10f)
+        big.textSize = sp((if (bigText.length > 4) 12f else 17f) * bigScale)
+        small.textSize = sp(10f * smallScale)
         val cx = width / 2f; val cy = height / 2f
         canvas.drawText(bigText, cx, cy + 1f * d, big)
         canvas.drawText(smallText, cx, cy + 13f * d, small)

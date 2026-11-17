@@ -92,6 +92,8 @@ Tap **5 · Start session**. Android asks to record the screen: pick **Entire scr
 
 **How to read it:** a green ring means a great Pokémon (top-100 PvP rank or ≥ 91 %), amber is decent, red is weak. **✓** in a league row = a top-100 spread, **?** = maybe, **✗** = not good, *CP too high* = already above that league's limit.
 
+**Small window, key numbers only.** Drag the bottom edge to make the window small: the card then shows just the **% ring**, the **Attack / Defense / HP** values and one line with the league it is good for (*Good for Great · Master*, *Maybe Ultra*, or *No league fit*). Make it normal-sized or bigger and the full card comes back (level, CP, HP, all four league rows, the rating and *Copy log*).
+
 #### Get the exact IVs (recommended)
 Without an appraisal the app estimates and may show a range like *84–96 %*. For the exact numbers:
 
@@ -108,8 +110,8 @@ This also fixes **renamed Pokémon**: the game's "This … was caught on …" li
 2. In the game tap the **Poké Ball → Items**.
 3. **Scroll slowly** through the *whole* list. The app remembers everything it has seen (*remembered: N item types*). Tip: tap **–** to hide the window while you scroll.
 4. Read the window:
-   - **Can remove** – items above the keep limit (84 Poké Balls with a limit of 50 → remove 34).
-   - **Keep** – everything else. Important items (incense, lures, Lucky Egg, Rare Candy, TMs …) are never suggested.
+   - **Can remove** – items above the keep limit (84 Poké Balls with a limit of 50 → remove 34), each on a **red pill**.
+   - **Keep** – everything else, each on a **green pill**. Important items (incense, lures, Lucky Egg, Rare Candy, TMs …) are never suggested.
    - **Bag full?** It lists exactly what to discard to free up space, common items first.
    - **Free more (+10)** aims for 10 more free slots. **Reset** starts the list over.
 

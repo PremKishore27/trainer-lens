@@ -177,6 +177,7 @@ class CaptureService : Service() {
     private val bagPos = IntArray(2)  // the Bag tab sits low, so the top of the Items screen (bag size) stays readable
     private fun panelPos() = if (tab == Tab.BAG) bagPos else ivPos
     private var scale = OverlayScale.DEFAULT
+    private var compactCard = false   // the IV card shows only its key numbers while the window is small (see CardMode)
     private val maskPaint = Paint().apply { color = Color.BLACK }
     private val copyPaint = Paint().apply { xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC) }
     private var rawBmp: Bitmap? = null
@@ -269,6 +270,7 @@ class CaptureService : Service() {
     private fun applySize() {
         win.setOpen(panelOpen)
         win.applyScale(scale)
+        if (::iv.isInitialized) { compactCard = CardMode.isCompact(scale, compactCard); iv.setCompact(compactCard) }
         val (w, h) = win.footprint(panelOpen, scale)
         lp.width = w; lp.height = h
     }

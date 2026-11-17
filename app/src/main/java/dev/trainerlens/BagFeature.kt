@@ -13,7 +13,8 @@ import android.widget.TextView
 import android.widget.Toast
 import java.util.Locale
 
-internal enum class BagRowKind { HEADER, ITEM, TEXT, ART }
+/** DISCARD = a red pill (recommended to throw out), KEEP = a green pill (recommended to keep); the rest is plain. */
+internal enum class BagRowKind { HEADER, ITEM, DISCARD, KEEP, TEXT, ART }
 
 /**
  * Feature 1: bag/item storage advisor.
@@ -130,8 +131,7 @@ class BagFeature(private val ctx: Context) {
                 adviceText = "Free ${plan.needed} slots to reach $targetFree free."
                 rows += Row(BagRowKind.HEADER, "Discard")
                 plan.discards.forEach {
-                    rows += Row(BagRowKind.ITEM, it.item, "−${it.amount}" + if (it.belowKeep) " · below keep limit" else "",
-                        if (it.belowKeep) Ui.RED else Ui.AMBER)
+                    rows += Row(BagRowKind.DISCARD, it.item, "−${it.amount}" + if (it.belowKeep) " · below keep limit" else "", Ui.RED)
                 }
                 if (plan.freed < plan.needed) {
                     rows += Row(BagRowKind.TEXT, "Scroll the whole list for a better plan (short by ${plan.needed - plan.freed}).", color = Ui.TEXT2)
@@ -167,10 +167,13 @@ class BagFeature(private val ctx: Context) {
         val review = Recommender.review(confirmed)
         rows += Row(BagRowKind.HEADER, "Over keep limit")
         if (review.remove.isEmpty()) rows += Row(BagRowKind.TEXT, "Nothing above its keep limit.", color = Ui.TEXT2)
-        else review.remove.forEach { rows += Row(BagRowKind.ITEM, it.item, "−${it.amount}", Ui.AMBER) }
+        else review.remove.forEach { rows += Row(BagRowKind.DISCARD, it.item, "−${it.amount}", Ui.RED) }
         if (review.keep.isNotEmpty()) {
             rows += Row(BagRowKind.HEADER, "Keep")
-            rows += Row(BagRowKind.TEXT, review.keep.joinToString(" · "), color = Ui.TEXT2)
+            review.keep.forEach { k ->   // "Name ×12" -> a green pill with the name and the amount
+                val i = k.lastIndexOf(" ×")
+                rows += if (i > 0) Row(BagRowKind.KEEP, k.substring(0, i), k.substring(i + 1), Ui.GREEN) else Row(BagRowKind.KEEP, k, "", Ui.GREEN)
+            }
         }
     }
 
@@ -178,10 +181,15 @@ class BagFeature(private val ctx: Context) {
         BagRowKind.HEADER -> Ui.label(ctx, 10f, Ui.TEXT3).apply { text = r.left }.also {
             it.layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(18)).apply { topMargin = dp(4) }
         }
-        BagRowKind.ITEM -> LinearLayout(ctx).apply {
+        BagRowKind.ITEM, BagRowKind.DISCARD, BagRowKind.KEEP -> LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-            background = Ui.rounded(ctx, Ui.CHIP, 9f)
-            setPadding(dp(10), 0, dp(10), 0)
+            // whole-row pill: red for what to discard, green for what to keep, the plain chip for anything else
+            background = when (r.kind) {
+                BagRowKind.DISCARD -> Ui.rounded(ctx, Ui.RED_FILL, Metrics.BAG_ROW / 2f, Ui.RED_EDGE)
+                BagRowKind.KEEP -> Ui.rounded(ctx, Ui.GREEN_FILL, Metrics.BAG_ROW / 2f, Ui.GREEN_EDGE)
+                else -> Ui.rounded(ctx, Ui.CHIP, 9f)
+            }
+            setPadding(dp(12), 0, dp(12), 0)
             addView(Ui.label(ctx, 12f, Ui.TEXT).apply { text = r.left }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
             addView(Ui.label(ctx, 11f, r.color, gravity = Gravity.END or Gravity.CENTER_VERTICAL).apply { text = r.right },
                 LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT))

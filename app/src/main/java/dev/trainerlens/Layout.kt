@@ -35,6 +35,13 @@ object Metrics {
     const val MESSAGE_LINE = 16   // one 12 sp line with spacing
     const val MESSAGE_LINES_WITH_ART = 3
 
+    // IV card in its compact form (small window): ring, three IV rows and one league pill; everything else is hidden
+    const val COMPACT_RING = 84
+    const val COMPACT_BAR_ROW = 26
+    const val COMPACT_PICK = 30
+    const val COMPACT_GAP = 8
+    const val COMPACT_NEEDED = IV_HEADER + IV_GAP + COMPACT_RING + COMPACT_GAP + COMPACT_PICK
+
     // Bag panel, top to bottom (the list takes what is left)
     const val BAG_HEADER = 22
     const val BAG_BAR = 4
@@ -47,11 +54,23 @@ object Metrics {
 }
 
 /**
+ * When the window is small the IV card keeps only what matters at a glance (the % ring, the three IV values and the best
+ * league); at the normal size and bigger it shows everything. The switch has a little hysteresis so a finger jittering
+ * around the limit while resizing doesn't flip the card back and forth.
+ */
+object CardMode {
+    const val COMPACT_BELOW = 0.9f   // shrinking below this switches to the compact card
+    const val FULL_FROM = 0.93f      // growing back to this (or more) switches to the full card
+    fun isCompact(scale: Float, wasCompact: Boolean): Boolean =
+        if (scale.isNaN()) false else if (wasCompact) scale < FULL_FROM else scale < COMPACT_BELOW
+}
+
+/**
  * How big the window is drawn, as a factor of its design size (width follows height). The player drags the bottom edge
  * to change it; these functions keep the result inside sensible limits and on screen.
  */
 object OverlayScale {
-    const val MIN = 0.75f
+    const val MIN = 0.65f
     const val MAX = 1.3f
     const val DEFAULT = 1f
 
