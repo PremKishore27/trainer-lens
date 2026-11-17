@@ -137,6 +137,25 @@ class CoverTracker(private val needed: Int = 3) {
     fun reset() { count = 0 }
 }
 
+/**
+ * Knows when the in-game appraisal dialog is open, so the window can get out of its way. The dialog covers the lower part
+ * of the screen and hides the CP; [dialog] is a frame that looks like it, [page] a frame that shows the normal Pokémon
+ * page again. Two frames in a row are needed either way, so a flickering CP doesn't make the window jump.
+ */
+class AppraisalTracker(private val needed: Int = 2) {
+    var open = false; private set
+    private var on = 0; private var off = 0
+    /** Returns true when [open] changed. */
+    fun update(dialog: Boolean, page: Boolean): Boolean {
+        if (dialog) { on++; off = 0 } else if (page) { off++; on = 0 } else { on = 0; off = 0 }
+        val was = open
+        if (!open && on >= needed) open = true
+        if (open && off >= needed) open = false
+        return open != was
+    }
+    fun reset(): Boolean { val was = open; open = false; on = 0; off = 0; return was }
+}
+
 /** What the Bag tab says about where the player is. */
 enum class BagHint { NONE, GO_TO_BAG, NOT_ON_ITEMS }
 

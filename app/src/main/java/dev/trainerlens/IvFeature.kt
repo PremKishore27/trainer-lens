@@ -35,6 +35,9 @@ class IvFeature(private val ctx: Context, private val worker: Executor) {
     @Volatile private var lastSeen = 0L
     private var shown: CardModel? = null
     private var lastBars: Iv? = null
+    private val appraisal = AppraisalTracker()
+    /** Called (from the scan thread) when the in-game appraisal dialog opens or closes. */
+    var onAppraisal: ((Boolean) -> Unit)? = null
     private var lastTokens: List<Token> = emptyList()
     private var lastScreenH = 0
     private var ocrMs = 0L
@@ -63,6 +66,7 @@ class IvFeature(private val ctx: Context, private val worker: Executor) {
         if (read == null && onItemsScreen && SummaryParser.hp(tokens) == null && !SummaryParser.hasPowerUp(tokens) &&
             SummaryParser.cp(tokens, screenH) == null) {
             tracker.reset(); settled = false; cover.reset()
+            if (appraisal.reset()) onAppraisal?.invoke(false)
             show(CardModels.idle(onItems = true))
             return
         }
@@ -99,12 +103,14 @@ class IvFeature(private val ctx: Context, private val worker: Executor) {
             val caught = SpeciesDb.get()?.let { SpeciesDb.readCaught(tokens, it) }.orEmpty()
             if (caught.isNotEmpty() && tracker.observeCaught(hpNow, Clues(caught = caught))) changed = true
         }
+        val dialogLike = read == null && hpNow != null && tracker.knowsHp(hpNow)
         if (read == null && hpNow != null && tracker.hpOnly(hpNow)) changed = true
         // A Pokémon page (also the appraisal screen, which has no POWER UP button) whose CP is readable but whose HP line
         // isn't: the window is probably covering it.
         val covered = if (SummaryParser.looksLikePokemonPage(tokens)) cover.update(SummaryParser.cp(tokens, screenH), hpNow)
         else { cover.reset(); false }
         val bars = AppraisalReader.read(tokens, bmp)
+        if (appraisal.update(dialogLike || bars != null, read != null && bars == null)) onAppraisal?.invoke(appraisal.open)
         if (bars != null && tracker.current != null && (read != null || hpNow == tracker.current?.hp)) {
             if (tracker.observeBars(bars)) { lastSeen = now; changed = true }
         }
@@ -133,6 +139,7 @@ class IvFeature(private val ctx: Context, private val worker: Executor) {
 
         if (now - lastSeen > 5_000) { // no Pokémon page for a while
             tracker.reset(); settled = false
+            if (appraisal.reset()) onAppraisal?.invoke(false)
             show(CardModels.idle(onItemsScreen))
             return
         }

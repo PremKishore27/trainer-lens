@@ -201,6 +201,7 @@ class CaptureService : Service() {
         val saved = runCatching { getSharedPreferences("lens", MODE_PRIVATE).getFloat("scale", OverlayScale.DEFAULT) }.getOrDefault(OverlayScale.DEFAULT)
         scale = fitScale(saved)
         ivPos[1] = OverlayBand.snapY(ivPos[1], (win.panelHeightPx * scale).toInt(), realDisplaySize().second)
+        iv.onAppraisal = { open -> menuRoot?.post { appraisalOpen = open; if (open) moveOutOfAppraisal() } }
 
         lp = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
@@ -241,6 +242,21 @@ class CaptureService : Service() {
     /** [s] limited to the allowed range and to the room left on screen below / right of the window's corner. */
     private val realH: Int by lazy { realDisplaySize().second }
     private var settleAnim: ValueAnimator? = null
+    /** The in-game appraisal dialog is open: the IV window may only sit in the top band (see [OverlayBand]). */
+    private var appraisalOpen = false
+
+    /** The appraisal dialog opened: shrink the IV window to fit the top band if needed, then glide up into it. */
+    private fun moveOutOfAppraisal() {
+        if (tab != Tab.IV || !panelOpen) return
+        val b = menuRoot ?: return
+        val oldY = ivPos[1]
+        settleAnim?.cancel()
+        ivPos[1] = OverlayBand.top(realH)
+        scale = fitScale(scale)   // too tall for the top band: shrink for now (the saved size is not changed)
+        ivPos[1] = oldY
+        applySize(); runCatching { wm.updateViewLayout(b, lp) }
+        b.post { settle(ivPos) }
+    }
 
     private fun fitScale(s: Float): Float {
         val m = resources.displayMetrics
@@ -285,7 +301,7 @@ class CaptureService : Service() {
         pos[0] = pos[0].coerceIn(0, maxOf(0, m.widthPixels - b.width))
         pos[1] = pos[1].coerceIn(0, maxOf(0, realH - b.height))
         // the IV window stays out of the CP / HP lines the checker has to read (see OverlayBand)
-        if (snap && pos === ivPos && panelOpen) pos[1] = OverlayBand.snapY(pos[1], b.height, realH)
+        if (snap && pos === ivPos && panelOpen) pos[1] = OverlayBand.snapY(pos[1], b.height, realH, appraisalOpen)
         lp.x = pos[0]; lp.y = pos[1]
         runCatching { wm.updateViewLayout(b, lp) }
     }
@@ -298,7 +314,7 @@ class CaptureService : Service() {
         val b = menuRoot ?: return
         place(pos, snap = false)
         if (pos !== ivPos || !panelOpen) return
-        val target = OverlayBand.snapY(pos[1], b.height, realH)
+        val target = OverlayBand.snapY(pos[1], b.height, realH, appraisalOpen)
         if (target == pos[1]) return
         settleAnim?.cancel()
         settleAnim = ValueAnimator.ofInt(pos[1], target).apply {

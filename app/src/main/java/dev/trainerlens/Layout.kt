@@ -88,14 +88,16 @@ object OverlayBand {
     fun belowStart(realH: Int) = (realH * BELOW_START).toInt()
 
     /** The vertical positions [y] a window [h] pixels tall may have: above the HP line and / or below it. */
-    fun ranges(h: Int, realH: Int): List<IntRange> = listOfNotNull(
-        (top(realH)..(aboveEnd(realH) - h)).takeIf { !it.isEmpty() },
-        (belowStart(realH)..(realH - h)).takeIf { !it.isEmpty() },
-    )
+    fun ranges(h: Int, realH: Int, appraisal: Boolean = false): List<IntRange> {
+        val above = (top(realH)..(aboveEnd(realH) - h)).takeIf { !it.isEmpty() }
+        // The appraisal dialog fills the lower part of the screen (bars, "caught on" line): only the top band is free then.
+        if (appraisal && above != null) return listOf(above)
+        return listOfNotNull(above, (belowStart(realH)..(realH - h)).takeIf { !it.isEmpty() })
+    }
 
     /** [y] moved to the nearest allowed position. With no room anywhere it is just kept on screen. */
-    fun snapY(y: Int, h: Int, realH: Int): Int {
-        val rs = ranges(h, realH)
+    fun snapY(y: Int, h: Int, realH: Int, appraisal: Boolean = false): Int {
+        val rs = ranges(h, realH, appraisal)
         if (rs.isEmpty()) return y.coerceIn(0, maxOf(0, realH - h))
         return rs.map { y.coerceIn(it.first, it.last) }.minByOrNull { kotlin.math.abs(it - y) }!!
     }

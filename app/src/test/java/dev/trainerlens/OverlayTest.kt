@@ -150,4 +150,32 @@ class OverlayTest {
     @Test fun cpInTheMoveListIsNotTheCp() {
         assertNull(SummaryParser.cp(listOf(Token("CP 99", Box(0, 2000, 100, 2040))), H))
     }
+
+    /** Real appraisal dump (screen height 2589): bars at 1952-2197, "caught on" line to 2507. The top band must stay clear of them. */
+    @Test fun duringAnAppraisalTheWindowOnlySitsInTheTopBand() {
+        val realH = 2589; val h = (673 * OverlayScale.MIN).toInt()
+        val appraisalTop = 1952
+        assertTrue(OverlayBand.aboveEnd(realH) < appraisalTop)
+        for (drag in 0..realH step 20) {
+            val at = OverlayBand.snapY(drag, h, realH, appraisal = true)
+            assertTrue("y=$at would cover the appraisal", at + h <= OverlayBand.aboveEnd(realH) && at >= OverlayBand.top(realH))
+        }
+        // without an appraisal the lower half stays reachable
+        assertTrue(OverlayBand.snapY(2000, h, realH, appraisal = false) >= OverlayBand.belowStart(realH))
+        // a window too tall for the top band falls back to the normal ranges instead of failing
+        val tall = (realH * 0.5).toInt()
+        assertTrue(OverlayBand.ranges(tall, realH, appraisal = true) == OverlayBand.ranges(tall, realH))
+    }
+
+    @Test fun appraisalTrackerNeedsTwoFramesEitherWay() {
+        val t = AppraisalTracker()
+        assertFalse(t.update(dialog = true, page = false)); assertFalse(t.open)     // one frame: could be a flicker
+        assertTrue(t.update(dialog = true, page = false)); assertTrue(t.open)       // two: open
+        assertFalse(t.update(dialog = false, page = true)); assertTrue(t.open)      // one normal frame: still open
+        assertFalse(t.update(dialog = false, page = false)); assertTrue(t.open)     // unclear frames change nothing... but reset the count
+        assertFalse(t.update(dialog = false, page = true)); assertTrue(t.open)
+        assertTrue(t.update(dialog = false, page = true)); assertFalse(t.open)      // two normal frames: closed
+        t.update(true, false); t.update(true, false); assertTrue(t.open)
+        assertTrue(t.reset()); assertFalse(t.open); assertFalse(t.reset())
+    }
 }

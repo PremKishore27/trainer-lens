@@ -75,6 +75,11 @@ Tap **5 · Start session**. Android asks to record the screen: pick **Entire scr
 - Drag the **top bar** to move the window.
 - Drag the **thin bar along the bottom edge** up or down to make the window smaller or bigger. It remembers its size and position (the IV and Bag tabs each remember their own).
 
+**Where it may sit.** The app reads the Pokémon's CP (top), HP line (middle) and, during an appraisal, the bars and the "caught on" line (lower part of the screen). The window is blacked out in what the app reads, so it must not cover those:
+- it snaps away from the HP line by itself when you let go;
+- when you open the **appraisal** in the game, it glides up into the free space under the CP line (and gets smaller if it has to), so the bars and the "caught on" line stay readable. Just wait a second.
+- if a card says *Can't read the HP line*, drag the window up or down.
+
 ![Move and resize](img/10-move-and-resize.svg)
 
 ### IV tab – how good is this Pokémon?
