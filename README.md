@@ -19,18 +19,45 @@ A small movable window floats on top of the game and reads your screen with on-d
 Android 8.0+ · free · open source (MIT) · [step-by-step install guide](#install) · [what's new](CHANGELOG.md)
 <sub>💬 Questions or ideas? [Open an issue](https://github.com/PremKishore27/trainer-lens/issues/new/choose) · ☕ [Support on Ko-fi](https://ko-fi.com/premboii) · 🤖 [Built with AI assistance](#about-this-project)</sub>
 
-### See how it works
+## See it in action
+
+Real screenshots from a phone. The window floats on top of the game; the numbers match the notes under each picture. *(The location in the "caught on" line is hidden.)*
+
+### Get started
 
 <table>
 <tr>
-<td align="center" width="25%"><img src="docs/img/06-bubble.svg" alt="The bubble on top of the game"><br><sub><b>1.</b> Drag the 🔍 bubble, tap to open</sub></td>
-<td align="center" width="25%"><img src="docs/img/07-iv-card.svg" alt="IV card"><br><sub><b>2.</b> Open a Pokémon: IV and PvP card</sub></td>
-<td align="center" width="25%"><img src="docs/img/08-appraise.svg" alt="Appraise for exact IVs"><br><sub><b>3.</b> Appraise for exact IVs</sub></td>
-<td align="center" width="25%"><img src="docs/img/09-bag-tab.svg" alt="Bag advisor"><br><sub><b>4.</b> Bag: what to discard</sub></td>
+<td width="50%" valign="top"><img src="docs/img/shots/01-bubble.png" alt="The 🔍 bubble on top of the game map"><br><b>Drag the bubble anywhere</b><br><ol><li>The 🔍 bubble sits on top of the game. Tap it to open the window.</li></ol></td>
+<td width="50%" valign="top"><img src="docs/img/shots/02-open-window.png" alt="The open window with IV and Bag tabs"><br><b>One small window, two tabs</b><br><ol><li>Switch between <b>IV</b> and <b>Bag</b>.</li><li><b>–</b> folds it back into the bubble; <b>Stop</b> ends the session.</li><li>It always tells you what to do next.</li></ol></td>
 </tr>
 </table>
 
-<sub>These are drawn illustrations of the screens, not real screenshots (no game artwork is used). Real screenshots are coming.</sub>
+### 📊 IV checker
+*What have I caught – and is it any good?*
+
+<table>
+<tr>
+<td width="50%" valign="top"><img src="docs/img/shots/03-iv-estimate.png" alt="IV estimate for a Wailmer"><br><b>Open a Pokémon: an instant estimate</b><br><ol><li>IV range worked out from CP, HP and stardust.</li><li>A range for each of Attack, Defense and HP.</li><li>Level range, CP and HP.</li><li>Rank in the Little, Great, Ultra and Master leagues.</li><li>One tip: appraise in-game for the exact numbers.</li></ol></td>
+<td width="50%" valign="top"><img src="docs/img/shots/05-iv-perfect.png" alt="A perfect 100 percent Dragonite"><br><b>Spot a perfect one</b><br><ol><li>100 % – 15 / 15 / 15, with a green ring for the very best.</li><li>The league rows flag where it shines (<i>Good IVs</i> for Master League).</li><li>Rating and <i>exact</i>: the number is certain, not a guess.</li></ol></td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td width="50%" valign="top"><img src="docs/img/shots/04-iv-exact.png" alt="Exact IVs after the in-game appraisal"></td>
+<td width="50%" valign="top"><b>Appraise for exact IVs</b><br>In the game, tap ☰ → <b>Appraise</b> and keep the three bars on screen for a second.<ol><li>The ring turns exact: 89 %, 40 of 45.</li><li>Exact Attack / Defense / HP (14 / 13 / 13).</li><li>Rating with <i>exact</i>.</li><li>The bars the app measures – the window moves out of their way by itself.</li><li>The "caught on" line also names renamed Pokémon and regional forms.</li></ol></td>
+</tr>
+</table>
+
+### 🎒 Bag checker
+*Free up space without guessing.*
+
+<table>
+<tr>
+<td width="50%" valign="top"><img src="docs/img/shots/06-bag-wrong-screen.png" alt="Hint when the Item bag is open on the IV tab"><br><b>Lost? It points you the right way</b><br><ol><li>On the IV tab in the Item bag it says so, instead of showing nothing.</li><li>Switch to the <b>Bag</b> tab.</li></ol></td>
+<td width="50%" valign="top"><img src="docs/img/shots/07-bag-advice.png" alt="Bag advice with what to discard"><br><b>Scroll once, get a clear list</b><br><ol><li>How full the bag is (1391 / 1425) and how many item types it has seen.</li><li>How many slots to free to reach your target.</li><li>What to discard, common items first (important items are never listed).</li><li><b>Free +10</b> raises the target, <b>Reset</b> starts over.</li></ol></td>
+</tr>
+</table>
 
 **New here?** Follow the **[step-by-step walkthrough with pictures](docs/WALKTHROUGH.md)** – every setup tap explained, including the *Restricted setting* trap.
 

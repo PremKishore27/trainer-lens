@@ -5,6 +5,7 @@ Newest first. The latest build is always on the [Releases](https://github.com/Pr
 ## Unreleased → next release
 
 ### Added
+- **Real screenshots** in the README and walkthrough, with numbered highlights, shown separately for the IV checker and the Bag checker.
 - **Step-by-step walkthrough with pictures** ([docs/WALKTHROUGH.md](docs/WALKTHROUGH.md)): install, setup, and how to use the IV and Bag tabs, with drawn illustrations.
 - **App icon** (a magnifying glass with IV bars, also a themed icon on Android 13+) and a status-bar icon.
 - **New setup screen** in Material 3: step cards with ticks for what is already allowed, light / dark mode, wallpaper colours on Android 12+, and a how-to card.
