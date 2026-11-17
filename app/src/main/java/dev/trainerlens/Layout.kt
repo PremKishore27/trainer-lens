@@ -14,7 +14,8 @@ object Metrics {
     const val GAP = 6
     const val CONTENT_PAD = 10
     const val CONTENT_H = 196
-    const val PANEL_H = WINDOW_PAD + TOP_BAR + GAP + CONTENT_H + WINDOW_PAD
+    const val GRIP = 26      // the resize strip along the bottom edge
+    const val PANEL_H = WINDOW_PAD + TOP_BAR + GAP + CONTENT_H + GRIP
     const val INNER_H = CONTENT_H - 2 * CONTENT_PAD
 
     // IV card, top to bottom
@@ -45,10 +46,66 @@ object Metrics {
     const val BAG_LIST = INNER_H - BAG_FIXED
 }
 
-/** The two window sizes the size button switches between (the layout is designed at 1.0). */
-object WindowSize {
-    const val SMALL = 0.8f
-    const val LARGE = 1.1f
+/**
+ * How big the window is drawn, as a factor of its design size (width follows height). The player drags the bottom edge
+ * to change it; these functions keep the result inside sensible limits and on screen.
+ */
+object OverlayScale {
+    const val MIN = 0.75f
+    const val MAX = 1.3f
+    const val DEFAULT = 1f
+
+    /**
+     * [s] limited to [MIN]..[MAX], to the space right of / below the window's corner at ([x], [y]) and to [maxScale]
+     * (the IV tab's band, see [OverlayBand]). Never throws.
+     */
+    fun fit(s: Float, x: Int, y: Int, screenW: Int, screenH: Int, panelWpx: Int, panelHpx: Int, maxScale: Float = MAX): Float {
+        if (s.isNaN()) return DEFAULT
+        val room = if (panelWpx > 0 && panelHpx > 0)
+            minOf((screenW - x).toFloat() / panelWpx, (screenH - y).toFloat() / panelHpx) else MAX
+        val hi = maxOf(MIN, minOf(MAX, room, maxScale))   // hi >= MIN, so coerceIn below can't fail near a screen edge
+        return s.coerceIn(MIN, hi)
+    }
+
+    /** The scale after dragging the bottom edge [dy] pixels, starting from [startScale] at a window height of [startHpx]. */
+    fun fromDrag(startScale: Float, startHpx: Int, dy: Float): Float =
+        if (startHpx <= 0) startScale else startScale * (startHpx + dy) / startHpx
+}
+
+/**
+ * The IV checker has to read the CP line (about 5-9 % of the screen height) and the HP line (about 46-48 %). The window
+ * is part of the screen capture and is blacked out before reading, so on the IV tab it must not cover them. It can sit
+ * in the free band ABOVE the HP line ([TOP]..[ABOVE_END]) or in the area BELOW it ([BELOW_START]..end of screen), and it
+ * snaps away from the strip in between. (A real log showed a window covering the HP line: nothing could be read.)
+ */
+object OverlayBand {
+    const val TOP = 0.10f          // below the CP line
+    const val ABOVE_END = 0.44f    // above the HP line
+    const val BELOW_START = 0.50f  // below the HP line
+
+    fun top(realH: Int) = (realH * TOP).toInt()
+    fun aboveEnd(realH: Int) = (realH * ABOVE_END).toInt()
+    fun belowStart(realH: Int) = (realH * BELOW_START).toInt()
+
+    /** The vertical positions [y] a window [h] pixels tall may have: above the HP line and / or below it. */
+    fun ranges(h: Int, realH: Int): List<IntRange> = listOfNotNull(
+        (top(realH)..(aboveEnd(realH) - h)).takeIf { !it.isEmpty() },
+        (belowStart(realH)..(realH - h)).takeIf { !it.isEmpty() },
+    )
+
+    /** [y] moved to the nearest allowed position. With no room anywhere it is just kept on screen. */
+    fun snapY(y: Int, h: Int, realH: Int): Int {
+        val rs = ranges(h, realH)
+        if (rs.isEmpty()) return y.coerceIn(0, maxOf(0, realH - h))
+        return rs.map { y.coerceIn(it.first, it.last) }.minByOrNull { kotlin.math.abs(it - y) }!!
+    }
+
+    /** The biggest scale at which the window, growing down from [y], stays inside the zone it is in. */
+    fun maxScaleAt(y: Int, panelHpx: Int, realH: Int): Float {
+        if (panelHpx <= 0) return OverlayScale.MAX
+        val limit = if (y < belowStart(realH)) aboveEnd(realH) else realH
+        return (limit - y).toFloat() / panelHpx
+    }
 }
 
 object OverlayLayout {
@@ -95,4 +152,9 @@ object OverlayMask {
 /** Last overlay / capture geometry, copied into the "Copy log" text so a bad read can be diagnosed. */
 object Diag {
     @Volatile var line: String = ""
+    /** The last exception that was swallowed so the scan loop could carry on. */
+    @Volatile var error: String? = null
+    private val frames = java.util.ArrayDeque<String>()
+    @Synchronized fun frame(s: String) { if (frames.size >= 12) frames.removeFirst(); frames.addLast(s) }
+    @Synchronized fun recent(): String = frames.joinToString("\n")
 }

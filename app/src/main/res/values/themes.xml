@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Material 3, follows the system light / dark setting; Android 12+ adds the wallpaper's colours (see MainActivity). -->
+    <style name="Theme.TrainerLens" parent="Theme.Material3.DayNight.NoActionBar" />
+</resources>

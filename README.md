@@ -27,7 +27,7 @@ Android 8.0+ · free · no account · [step-by-step install guide](#install) · 
 
 | | Feature | What it shows |
 |---|---|---|
-| 🖐️ | **Movable glass overlay** | A 🔍 bubble you can drag anywhere. Tap it for one fixed-size, frosted-glass window with **IV** and **Bag** tabs – it never resizes, whichever Pokémon you open. Drag it by its top bar; the bubble and the window each remember their own spot. One **A− / A+** button switches between a larger and a smaller window. |
+| 🖐️ | **Movable glass overlay** | A 🔍 bubble you can drag anywhere. Tap it for one fixed-size, frosted-glass window with **IV** and **Bag** tabs – it never resizes, whichever Pokémon you open. Drag it by its top bar; the bubble and the window each remember their own spot. **Drag the bottom edge** of the window to resize it to any size you like (it remembers the size). |
 | 🧭 | **Guided hints** | If you're on the wrong screen, the card says so with a small drawing: *Go to your Item bag* on the Bag tab, *Open a Pokémon* (or *Wrong screen – you're in the Item bag*) on the IV tab. |
 | 🎒 | **Bag advisor** | Remembers your items for the whole session while you scroll. Shows free slots, what you **can remove** (over your keep limit) and what to **keep** – even when the bag isn't full. When it is full, it tells you exactly what to discard to free the slots you want. |
 | 📊 | **IV checker** | Open any Pokémon with the IV tab selected. **Appraise it for exact IVs** – the app measures the appraisal bars like Poké Genie. The card shows **IV %**, appraisal **stars**, the **Attack / Defense / HP** spread, estimated **level**, and **Little / Great / Ultra League rank**. |
@@ -94,7 +94,7 @@ Tested on: Motorola Signature (Android 17). Requires Android 8.0 or newer.
 
 ### The overlay
 - **Drag** the 🔍 bubble anywhere. **Tap** it to open the window.
-- In the window's top bar: the **IV | Bag** switch, the **A− / A+** size button, **–** (back to the bubble) and **Stop** (ends the session). Drag the bar to move the window.
+- In the window's top bar: the **IV | Bag** switch, a grip along the bottom edge (**drag it to resize**), **–** (back to the bubble) and **Stop** (ends the session). Drag the bar to move the window.
 - The window opens in the free band between the CP line and the HP line, so it hides nothing the app reads.
 - **Stuck?** The cards tell you where to go: on the IV tab, *Check a Pokémon* / *Wrong screen* with a Poké Ball drawing; on the Bag tab, *Go to your Item bag* with a bag drawing.
 
@@ -120,7 +120,7 @@ Keep limits and rarity are in [`Rules.kt`](app/src/main/java/dev/trainerlens/Rul
 
 ### 📊 IV checker
 Tap 🔍 → **IV**, then open a Pokémon from your Pokémon list. The window opens in the free band between the CP line and the HP line, so it hides nothing the app reads; drag it by its top bar if you want it elsewhere.
-The **A− / A+** button in the top bar switches the window between a larger and a smaller size (it remembers your choice).
+**Resize:** drag the thin bar along the bottom edge of the window up or down. The window grows or shrinks (width follows height) and remembers its size.
 **Renamed Pokémon:** if the card says *Can't tell which Pokémon this is*, open ☰ → **Appraise** in the game. The app reads the *"This … was caught on …"* line of that screen (also "Alolan Exeggutor" style names) and identifies the Pokémon by itself.
 If it covers the Pokémon's HP / name / type lines, the card says **Can't read the HP line** – drag the window up or down. For the **exact** result, appraise it in-game (☰ → Appraise) and keep the bars on screen for a second.
 The card shows:
@@ -149,7 +149,7 @@ League ranks compare all 4,096 spreads of that species (#1 = best possible) – 
 | The IV card says **Check a Pokémon** | Open a Pokémon from your Pokémon list (not the map). |
 | **Wrong screen** on the IV tab | You're in the Item bag. Go back and open a Pokémon. |
 | **Go to your Item bag** on the Bag tab | In the game tap the Poké Ball → Items, then scroll the list slowly. |
-| **Can't read the HP line** | The window covers the Pokémon's name / HP / type lines. Drag it up or down, or tap **A−** to make it smaller. |
+| **Can't read the HP line** | The window covers the Pokémon's name / HP / type lines. Drag it up or down, or drag its bottom edge to make it smaller. |
 | **Can't tell which Pokémon this is** | Appraise the Pokémon (☰ → Appraise). The *caught on* line names it. |
 | **No IV spread fits** | Wait a second (OCR may have misread), or it's a Mega / buddy-boosted Pokémon. |
 | **Loading data…** | The Pokémon stats come from the internet. Check your connection. |

@@ -7,6 +7,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.animation.ValueAnimator
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -27,6 +28,7 @@ import android.view.MotionEvent
 import android.view.ViewConfiguration
 import android.view.View
 import android.view.WindowManager
+import android.view.animation.DecelerateInterpolator
 import android.util.DisplayMetrics
 import android.util.TypedValue
 import android.view.ViewGroup
@@ -86,7 +88,7 @@ class CaptureService : Service() {
         getSystemService(NotificationManager::class.java)
             .createNotificationChannel(NotificationChannel(ch, "Trainer Lens", NotificationManager.IMPORTANCE_LOW))
         val n = Notification.Builder(this, ch).setContentTitle("Trainer Lens is reading the screen")
-            .setSmallIcon(android.R.drawable.ic_menu_view).build()
+            .setSmallIcon(R.drawable.ic_stat).build()
         startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
     }
 
@@ -111,7 +113,8 @@ class CaptureService : Service() {
                 else -> 500L                                                       // no Pokémon page on screen: don't burn battery
             }
             ivActive() -> 500L
-            ::bag.isInitialized && bag.recentlySeen(SystemClock.elapsedRealtime()) -> 400L // scrolling the Items list: don't miss rows
+            panelOpen && tab == Tab.BAG && !(::bag.isInitialized && bag.recentlySeen(SystemClock.elapsedRealtime())) -> 400L // waiting for the Items screen
+            ::bag.isInitialized && bag.recentlySeen(SystemClock.elapsedRealtime()) -> 60L  // scrolling the Items list: as fast as text recognition allows
             else -> 1000L
         }
         main.postDelayed(scanTask, delay)
@@ -154,7 +157,7 @@ class CaptureService : Service() {
                     iv.onItemsScreen = bag.recentlySeen(SystemClock.elapsedRealtime())
                     worker.execute {
                         try { iv.onFrame(tokens, bmp, screenH, SystemClock.elapsedRealtime(), ocrMs) }
-                        catch (e: Exception) { /* a bad frame must never stop the scan loop */ }
+                        catch (e: Exception) { iv.reportError(e) } // a bad frame must never stop the scan loop, but it must not hide either
                         finally { main.post { frameDone(bmp) } }
                     }
                 } else frameDone(bmp)
@@ -168,122 +171,66 @@ class CaptureService : Service() {
     private var tab: Tab? = null
 
     private lateinit var lp: WindowManager.LayoutParams
-    private lateinit var bubbleView: View
-    private lateinit var panelView: View
-    private lateinit var contentFrame: FrameLayout
-    private lateinit var tabIv: TextView
-    private lateinit var tabBag: TextView
+    private lateinit var win: OverlayWindow
     private val bubblePos = IntArray(2)
-    private val panelPos = IntArray(2)
-    private var panelPlaced = false
-    private var panelW = 0
-    private var bubbleSize = 0
+    private val ivPos = IntArray(2)   // the IV tab needs the band between the CP and HP lines
+    private val bagPos = IntArray(2)  // the Bag tab sits low, so the top of the Items screen (bag size) stays readable
+    private fun panelPos() = if (tab == Tab.BAG) bagPos else ivPos
+    private var scale = OverlayScale.DEFAULT
     private val maskPaint = Paint().apply { color = Color.BLACK }
-    private var small = false
-    private lateinit var sizeBtn: TextView
     private val copyPaint = Paint().apply { xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC) }
     private var rawBmp: Bitmap? = null
     private var frameBmp: Bitmap? = null
 
     /**
-     * One floating window with two states, both of fixed size: a 🔍 bubble, or a frosted-glass panel with an IV / Bag
-     * switch. The bubble and the panel each remember their own position, so opening and closing never moves things.
-     * Drag the bubble, or the top bar of the panel, to move it.
+     * One floating window with two states: a 🔍 bubble, or a frosted-glass panel with an IV / Bag switch. The bubble and
+     * the panel each remember their own position. Drag the bubble, or the panel's top bar, to move it; drag the bottom
+     * edge of the panel to resize it. The views live in [OverlayWindow].
      */
     private fun setupMenu() {
-        val svc = this
         val m = resources.displayMetrics
-        fun dp(v: Int) = Ui.dp(svc, v)
-        panelW = OverlayLayout.panelWidthPx(m.widthPixels, m.density)
-        bubbleSize = dp(52)
-        bubblePos[0] = m.widthPixels - bubbleSize - dp(8); bubblePos[1] = dp(160)
+        val panelW = OverlayLayout.panelWidthPx(m.widthPixels, m.density)
+        val bubbleSize = Ui.dp(this, 52)
+        bubblePos[0] = m.widthPixels - bubbleSize - Ui.dp(this, 8); bubblePos[1] = Ui.dp(this, 160)
+        win = OverlayWindow(this, panelW, bubbleSize, { select(Tab.IV) }, { select(Tab.BAG) }, { setExpanded(false) }, { stopSelf() })
         // the panel opens below the CP line and above the HP / type lines, where it hides nothing the IV checker reads
-        small = runCatching { getSharedPreferences("lens", MODE_PRIVATE).getBoolean("small", false) }.getOrDefault(false)
-        val r0 = OverlayLayout.panelRect(m.widthPixels, m.heightPixels, m.density,
-            if (small) WindowSize.SMALL else WindowSize.LARGE)
-        panelPos[0] = r0.left; panelPos[1] = r0.top; panelPlaced = true
+        val r0 = OverlayLayout.panelRect(m.widthPixels, m.heightPixels, m.density)
+        ivPos[0] = r0.left; ivPos[1] = r0.top
+        bagPos[0] = r0.left
+        bagPos[1] = (m.heightPixels - win.panelHeightPx - Ui.dp(this, 110)).coerceAtLeast(r0.top)
+        val saved = runCatching { getSharedPreferences("lens", MODE_PRIVATE).getFloat("scale", OverlayScale.DEFAULT) }.getOrDefault(OverlayScale.DEFAULT)
+        scale = fitScale(saved)
+        ivPos[1] = OverlayBand.snapY(ivPos[1], (win.panelHeightPx * scale).toInt(), realDisplaySize().second)
 
         lp = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL, PixelFormat.TRANSLUCENT
         ).apply { gravity = Gravity.TOP or Gravity.START; x = bubblePos[0]; y = bubblePos[1] }
-
-        val bubble = TextView(this).apply {
-            text = "🔍"; setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f); gravity = Gravity.CENTER
-            background = Ui.rounded(svc, Ui.GLASS, 26f, Ui.GLASS_STROKE)
-        }
-        bubbleView = bubble
-
-        // top bar: IV | Bag switch, drag area, minimise, stop
-        fun tabLabel(t: String) = Ui.label(svc, 13f, Ui.TEXT2, bold = true, gravity = Gravity.CENTER).apply { text = t; isClickable = true }
-        tabIv = tabLabel("IV").apply { setOnClickListener { select(Tab.IV) } }
-        tabBag = tabLabel("Bag").apply { setOnClickListener { select(Tab.BAG) } }
-        val seg = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            background = Ui.rounded(svc, Ui.CHIP, 11f)
-            setPadding(dp(2), dp(2), dp(2), dp(2))
-            addView(tabIv, LinearLayout.LayoutParams(dp(46), dp(Metrics.TOP_BAR - 4)))
-            addView(tabBag, LinearLayout.LayoutParams(dp(46), dp(Metrics.TOP_BAR - 4)))
-        }
-        val dragArea = FrameLayout(this).apply {
-            addView(View(svc).apply { background = Ui.rounded(svc, Ui.CHIP_ACTIVE, 2f) }, FrameLayout.LayoutParams(dp(28), dp(4), Gravity.CENTER))
-        }
-        sizeBtn = Ui.button(svc, "", 4) { toggleSize() }
-        val topBar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-            addView(seg)
-            addView(dragArea, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
-            addView(sizeBtn, LinearLayout.LayoutParams(dp(34), dp(Metrics.TOP_BAR)).apply { marginEnd = dp(5) })
-            addView(Ui.button(svc, "–", 4) { setExpanded(false) }, LinearLayout.LayoutParams(dp(34), dp(Metrics.TOP_BAR)).apply { marginEnd = dp(5) })
-            addView(Ui.button(svc, "Stop", 4) { stopSelf() }, LinearLayout.LayoutParams(dp(46), dp(Metrics.TOP_BAR)))
-        }
-
-        contentFrame = FrameLayout(this).apply {
-            background = Ui.rounded(svc, Ui.WELL, 16f)
-            setPadding(dp(Metrics.CONTENT_PAD), dp(Metrics.CONTENT_PAD), dp(Metrics.CONTENT_PAD), dp(Metrics.CONTENT_PAD))
-        }
-        val panel = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            background = Ui.rounded(svc, Ui.GLASS, 22f, Ui.GLASS_STROKE)
-            setPadding(dp(Metrics.WINDOW_PAD), dp(Metrics.WINDOW_PAD), dp(Metrics.WINDOW_PAD), dp(Metrics.WINDOW_PAD))
-            addView(topBar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(Metrics.TOP_BAR)))
-            addView(contentFrame, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(Metrics.CONTENT_H)).apply { topMargin = dp(Metrics.GAP) })
-            visibility = View.GONE
-        }
-        panelView = panel
         applySize()
-
-        val box = FrameLayout(this).apply {
-            addView(bubble, FrameLayout.LayoutParams(bubbleSize, bubbleSize))
-            addView(panel, FrameLayout.LayoutParams(panelW, ViewGroup.LayoutParams.WRAP_CONTENT))
-        }
-        menuRoot = box
-        makeDraggable(bubble, bubblePos) { setExpanded(true) }
-        makeDraggable(topBar, panelPos, null)
+        makeDraggable(win.bubble, { bubblePos }) { setExpanded(true) }
+        makeDraggable(win.topBar, { panelPos() }, null)
+        makeResizable(win.grip)
         select(Tab.IV)
-        wm.addView(box, lp)
+        menuRoot = win.root
+        wm.addView(win.root, lp)
     }
 
     private fun select(t: Tab) {
         tab = t
-        contentFrame.removeAllViews()
-        contentFrame.addView(if (t == Tab.BAG) bag.panel else iv.panel,
-            FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        styleTab(tabIv, t == Tab.IV); styleTab(tabBag, t == Tab.BAG)
-    }
-
-    private fun styleTab(v: TextView, active: Boolean) {
-        v.setTextColor(if (active) Ui.TEXT else Ui.TEXT2)
-        v.background = if (active) Ui.rounded(this, Ui.CHIP_ACTIVE, 9f) else null
+        win.showTab(if (t == Tab.BAG) bag.panel else iv.panel, t == Tab.BAG)
+        if (panelOpen) { // move to this tab's own spot
+            scale = fitScale(scale); applySize()
+            val pos = panelPos()
+            lp.x = pos[0]; lp.y = pos[1]
+            menuRoot?.let { b -> runCatching { wm.updateViewLayout(b, lp) }; b.post { place(pos) } }
+        }
     }
 
     private fun setExpanded(open: Boolean) {
         panelOpen = open
-        bubbleView.visibility = if (open) View.GONE else View.VISIBLE
-        panelView.visibility = if (open) View.VISIBLE else View.GONE
         applySize()
-        val pos = if (open) panelPos else bubblePos
+        val pos = if (open) panelPos() else bubblePos
         lp.x = pos[0]; lp.y = pos[1]
         menuRoot?.let { b ->
             runCatching { wm.updateViewLayout(b, lp) }
@@ -291,48 +238,90 @@ class CaptureService : Service() {
         }
     }
 
-    /**
-     * The panel is drawn at [WindowSize] scale, and the window is given exactly that footprint (not wrap-content), so
-     * the touch area, the on-screen clamp and the black-out mask all match what is visible.
-     */
-    private fun applySize() {
-        val s = if (small) WindowSize.SMALL else WindowSize.LARGE
-        panelView.pivotX = 0f; panelView.pivotY = 0f; panelView.scaleX = s; panelView.scaleY = s
-        sizeBtn.text = if (small) "A+" else "A−"
-        if (panelOpen) { lp.width = (panelW * s).toInt(); lp.height = (Ui.dp(this, Metrics.PANEL_H) * s).toInt() }
-        else { lp.width = bubbleSize; lp.height = bubbleSize }
+    /** [s] limited to the allowed range and to the room left on screen below / right of the window's corner. */
+    private val realH: Int by lazy { realDisplaySize().second }
+    private var settleAnim: ValueAnimator? = null
+
+    private fun fitScale(s: Float): Float {
+        val m = resources.displayMetrics
+        // on the IV tab the window must also fit the band between the CP and HP lines
+        val band = if (tab == Tab.BAG) OverlayScale.MAX else OverlayBand.maxScaleAt(panelPos()[1], win.panelHeightPx, realH)
+        return OverlayScale.fit(s, panelPos()[0], panelPos()[1], m.widthPixels, realH, win.panelWidthPx, win.panelHeightPx, band)
     }
 
-    private fun toggleSize() {
-        small = !small
-        runCatching { getSharedPreferences("lens", MODE_PRIVATE).edit().putBoolean("small", small).apply() }
-        applySize()
-        menuRoot?.let { b -> runCatching { wm.updateViewLayout(b, lp) }; b.post { place(panelPos) } }
+    /** The window is given exactly the footprint of what is drawn, so touches, the clamp and the mask match it. */
+    private fun applySize() {
+        win.setOpen(panelOpen)
+        win.applyScale(scale)
+        val (w, h) = win.footprint(panelOpen, scale)
+        lp.width = w; lp.height = h
+    }
+
+    /** Dragging the bottom strip down / up makes the window bigger / smaller (width follows height). */
+    private fun makeResizable(grip: View) {
+        var downY = 0f; var startScale = 1f; var startH = 1
+        grip.setOnTouchListener { _, e ->
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN -> { downY = e.rawY; startScale = scale; startH = lp.height.coerceAtLeast(1); true }
+                MotionEvent.ACTION_MOVE -> {
+                    val s = fitScale(OverlayScale.fromDrag(startScale, startH, e.rawY - downY))
+                    if (s != scale) { scale = s; applySize(); menuRoot?.let { runCatching { wm.updateViewLayout(it, lp) } } }
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    runCatching { getSharedPreferences("lens", MODE_PRIVATE).edit().putFloat("scale", scale).apply() }
+                    menuRoot?.post { settle(panelPos()) }
+                    true
+                }
+                else -> true
+            }
+        }
     }
 
     /** Moves the window to [pos] (clamped to the screen) and remembers the clamped value. */
-    private fun place(pos: IntArray) {
+    private fun place(pos: IntArray, snap: Boolean = true) {
         val b = menuRoot ?: return
         val m = resources.displayMetrics
         pos[0] = pos[0].coerceIn(0, maxOf(0, m.widthPixels - b.width))
-        pos[1] = pos[1].coerceIn(0, maxOf(0, m.heightPixels - b.height))
+        pos[1] = pos[1].coerceIn(0, maxOf(0, realH - b.height))
+        // the IV window stays out of the CP / HP lines the checker has to read (see OverlayBand)
+        if (snap && pos === ivPos && panelOpen) pos[1] = OverlayBand.snapY(pos[1], b.height, realH)
         lp.x = pos[0]; lp.y = pos[1]
         runCatching { wm.updateViewLayout(b, lp) }
     }
 
-    private fun makeDraggable(handle: View, pos: IntArray, onTap: (() -> Unit)?) {
+    /**
+     * While you drag, the window follows your finger smoothly, wherever it goes. When you let go over the strip it must
+     * not cover, it glides to the nearest allowed spot instead of jumping.
+     */
+    private fun settle(pos: IntArray) {
+        val b = menuRoot ?: return
+        place(pos, snap = false)
+        if (pos !== ivPos || !panelOpen) return
+        val target = OverlayBand.snapY(pos[1], b.height, realH)
+        if (target == pos[1]) return
+        settleAnim?.cancel()
+        settleAnim = ValueAnimator.ofInt(pos[1], target).apply {
+            duration = 200; interpolator = DecelerateInterpolator()
+            addUpdateListener { a -> pos[1] = a.animatedValue as Int; lp.y = pos[1]; runCatching { wm.updateViewLayout(b, lp) } }
+            start()
+        }
+    }
+
+    private fun makeDraggable(handle: View, posOf: () -> IntArray, onTap: (() -> Unit)?) {
         val slop = ViewConfiguration.get(this).scaledTouchSlop
         var downX = 0f; var downY = 0f; var startX = 0; var startY = 0; var moved = false
         handle.setOnTouchListener { _, e ->
             when (e.actionMasked) {
-                MotionEvent.ACTION_DOWN -> { downX = e.rawX; downY = e.rawY; startX = pos[0]; startY = pos[1]; moved = false; true }
+                MotionEvent.ACTION_DOWN -> { settleAnim?.cancel(); val pos = posOf(); downX = e.rawX; downY = e.rawY; startX = pos[0]; startY = pos[1]; moved = false; true }
                 MotionEvent.ACTION_MOVE -> {
                     val dx = e.rawX - downX; val dy = e.rawY - downY
                     if (!moved && (abs(dx) > slop || abs(dy) > slop)) moved = true
-                    if (moved) { pos[0] = startX + dx.toInt(); pos[1] = startY + dy.toInt(); place(pos) }
+                    if (moved) { val pos = posOf(); pos[0] = startX + dx.toInt(); pos[1] = startY + dy.toInt(); place(pos, snap = false) }
                     true
                 }
-                MotionEvent.ACTION_UP -> { if (!moved) onTap?.invoke(); true }
+                MotionEvent.ACTION_UP -> { if (!moved) onTap?.invoke() else settle(posOf()); true }
+                MotionEvent.ACTION_CANCEL -> { if (moved) settle(posOf()); true }
                 else -> true
             }
         }

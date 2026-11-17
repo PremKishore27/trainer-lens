@@ -78,6 +78,7 @@ class BagFeature(private val ctx: Context) {
         val txt = buildString {
             append("Trainer Lens ${BuildConfig.VERSION_NAME} · screen height $lastScreenH\n")
             append("Overlay: ${Diag.line}\n")
+            Diag.error?.let { append("Last error: $it\n") }
             append("Remembered: ${memory.counts()} · unconfirmed ${memory.unconfirmed().keys}\n")
             append("Parsed: ${p.counts} · bag ${p.used}/${p.capacity}\n---\n")
             lastTokens.sortedBy { it.box.top }.forEach { append("${it.text}  @${it.box.left},${it.box.top},${it.box.right},${it.box.bottom}\n") }
@@ -113,7 +114,12 @@ class BagFeature(private val ctx: Context) {
         if (hint == BagHint.NOT_ON_ITEMS) rows += Row(BagRowKind.TEXT, Hints.BAG_NOT_ON_ITEMS, color = Ui.TEXT3)
         if (u == null || c == null) {
             fillFrac = 0f; fillColor = Ui.GREY; fillLabel = types
-            adviceText = if (hint == BagHint.NONE) "Reading your bag…" else Hints.BAG_GO_ADVICE
+            adviceText = when {
+                hint != BagHint.NONE -> Hints.BAG_GO_ADVICE
+                confirmed.isEmpty() -> "Reading your bag…"
+                else -> "Bag size not read – showing what is over your limit."
+            }
+            addReview(rows, confirmed) // the over-limit list needs no bag size, so it shows right away
         } else {
             // The advice only uses readings seen twice, so one misread while scrolling can't tell you to discard 40 Potions.
             val plan = Recommender.plan(confirmed, u, c, targetFree)
@@ -132,14 +138,7 @@ class BagFeature(private val ctx: Context) {
                 }
             } else adviceText = "$free free slots – nothing to discard."
 
-            val review = Recommender.review(confirmed)
-            rows += Row(BagRowKind.HEADER, "Over keep limit")
-            if (review.remove.isEmpty()) rows += Row(BagRowKind.TEXT, "Nothing above its keep limit.", color = Ui.TEXT2)
-            else review.remove.forEach { rows += Row(BagRowKind.ITEM, it.item, "−${it.amount}", Ui.AMBER) }
-            if (review.keep.isNotEmpty()) {
-                rows += Row(BagRowKind.HEADER, "Keep")
-                rows += Row(BagRowKind.TEXT, review.keep.joinToString(" · "), color = Ui.TEXT2)
-            }
+            addReview(rows, confirmed)
         }
         if (unconfirmed.isNotEmpty()) {
             rows += Row(BagRowKind.HEADER, "Seen once – scroll slower to confirm")
@@ -160,6 +159,19 @@ class BagFeature(private val ctx: Context) {
         advice.text = adviceText
         list.removeAllViews()
         for (r in rows) list.addView(build(r))
+    }
+
+    /** "Over keep limit" and "Keep" sections for the confirmed items. */
+    private fun addReview(rows: MutableList<Row>, confirmed: Map<String, Int>) {
+        if (confirmed.isEmpty()) return
+        val review = Recommender.review(confirmed)
+        rows += Row(BagRowKind.HEADER, "Over keep limit")
+        if (review.remove.isEmpty()) rows += Row(BagRowKind.TEXT, "Nothing above its keep limit.", color = Ui.TEXT2)
+        else review.remove.forEach { rows += Row(BagRowKind.ITEM, it.item, "−${it.amount}", Ui.AMBER) }
+        if (review.keep.isNotEmpty()) {
+            rows += Row(BagRowKind.HEADER, "Keep")
+            rows += Row(BagRowKind.TEXT, review.keep.joinToString(" · "), color = Ui.TEXT2)
+        }
     }
 
     private fun build(r: Row): View = when (r.kind) {

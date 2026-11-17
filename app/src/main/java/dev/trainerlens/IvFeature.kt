@@ -39,7 +39,8 @@ class IvFeature(private val ctx: Context, private val worker: Executor) {
     private var lastScreenH = 0
     private var ocrMs = 0L
     private var analysisMs = 0L
-    private var noHpFrames = 0
+    private val cover = CoverTracker()
+    private val noHpFrames get() = cover.count
     private var hintShown = false
 
     /** A Pokémon page was read within the last 3 s – worth scanning fast. Otherwise (map, other screens) scan slowly. */
@@ -55,11 +56,13 @@ class IvFeature(private val ctx: Context, private val worker: Executor) {
         val t0 = System.nanoTime()
         lastTokens = tokens; lastScreenH = screenH; ocrMs = ocrTimeMs
         val read = SummaryParser.parse(tokens, screenH)
+        Diag.frame("t=${now % 100000}ms tokens=${tokens.size} cp=${SummaryParser.cp(tokens, screenH)} hp=${SummaryParser.hp(tokens)} " +
+            "power=${SummaryParser.hasPowerUp(tokens)} read=${read != null} shown=${tracker.current?.let { "${it.cp}/${it.hp}" }} onItems=$onItemsScreen")
         // The Item bag is open and nothing of a Pokémon page (no CP, HP or POWER UP) is on screen: say so right away.
         // The checks keep this away from an appraisal, which has HP but no CP.
         if (read == null && onItemsScreen && SummaryParser.hp(tokens) == null && !SummaryParser.hasPowerUp(tokens) &&
             SummaryParser.cp(tokens, screenH) == null) {
-            tracker.reset(); settled = false; noHpFrames = 0
+            tracker.reset(); settled = false; cover.reset()
             show(CardModels.idle(onItems = true))
             return
         }
@@ -97,8 +100,10 @@ class IvFeature(private val ctx: Context, private val worker: Executor) {
             if (caught.isNotEmpty() && tracker.observeCaught(hpNow, Clues(caught = caught))) changed = true
         }
         if (read == null && hpNow != null && tracker.hpOnly(hpNow)) changed = true
-        // A Pokémon page whose CP is readable but whose HP line isn't: the window is probably covering it.
-        noHpFrames = if (read == null && hpNow == null && SummaryParser.hasPowerUp(tokens) && SummaryParser.cp(tokens, screenH) != null) noHpFrames + 1 else 0
+        // A Pokémon page (also the appraisal screen, which has no POWER UP button) whose CP is readable but whose HP line
+        // isn't: the window is probably covering it.
+        val covered = if (SummaryParser.looksLikePokemonPage(tokens)) cover.update(SummaryParser.cp(tokens, screenH), hpNow)
+        else { cover.reset(); false }
         val bars = AppraisalReader.read(tokens, bmp)
         if (bars != null && tracker.current != null && (read != null || hpNow == tracker.current?.hp)) {
             if (tracker.observeBars(bars)) { lastSeen = now; changed = true }
@@ -117,10 +122,10 @@ class IvFeature(private val ctx: Context, private val worker: Executor) {
             return
         }
 
-        if (noHpFrames >= 3) {
+        if (covered) {
             lastSeen = now; settled = true; hintShown = true // nothing will change until the window moves: scan calmly
             show(CardModels.message("Can't read the HP line",
-                "This window is covering the Pokémon's name, HP or type lines.\nDrag it up or down, or hide it with –."))
+                "This window covers the Pokémon's name,\nHP or type lines. Move it, drag its\nbottom edge to shrink it, or tap –."))
             analysisMs = (System.nanoTime() - t0) / 1_000_000
             return
         }
@@ -154,6 +159,13 @@ class IvFeature(private val ctx: Context, private val worker: Executor) {
         show(CardModels.from(r, m))
     }
 
+    /** A frame threw an exception: say so on the card instead of silently showing nothing. Called on the worker thread. */
+    fun reportError(e: Exception) {
+        val msg = "${e.javaClass.simpleName}: ${(e.message ?: "").take(50)} @ ${e.stackTrace.firstOrNull()?.let { "${it.fileName}:${it.lineNumber}" }}"
+        Diag.error = msg
+        show(CardModels.message("Something went wrong", "${msg.take(70)}\nTap Copy log and send it to me."))
+    }
+
     /** Updates the card on the main thread; skips the work if nothing changed. */
     private fun show(model: CardModel) {
         if (model == shown) return
@@ -169,6 +181,8 @@ class IvFeature(private val ctx: Context, private val worker: Executor) {
             val txt = buildString {
                 append("Trainer Lens ${BuildConfig.VERSION_NAME} · IV · screen height $lastScreenH · OCR ${ocrMs} ms · analysis ${analysisMs} ms\n")
                 append("Overlay: ${Diag.line}\n")
+                Diag.error?.let { append("Last error: $it\n") }
+                append("Recent frames (newest last):\n${Diag.recent()}\n")
                 append("Read: cp=${SummaryParser.cp(lastTokens, lastScreenH)} hp=${SummaryParser.hp(lastTokens)} powerUp=${SummaryParser.hasPowerUp(lastTokens)} noHpFrames=$noHpFrames\n")
                 append("Clues: names=${clues?.names?.map { it.label }} family=${clues?.family?.map { it.name }?.distinct()} types=${clues?.types} " +
                     "size=${clues?.heightM}m/${clues?.weightKg}kg evolve=${clues?.evolveCost} caught=${clues?.caught?.map { it.name }?.distinct()}\n")

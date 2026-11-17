@@ -42,7 +42,8 @@ object ItemParser {
             if (hpWordRx.containsMatchIn(t.text)) continue // "163 / 163 HP" on a Pokémon page is not the bag fill
             capacityRx.find(t.text)?.let {
                 val u = it.groupValues[1].toInt(); val c = it.groupValues[2].toInt()
-                if (c in 100..5000 && u <= c && (cap == null || c > cap!!)) { used = u; cap = c }
+                // the bag can hold MORE than its capacity (gifts, a lowered limit): "1506/1425" was read on a real phone
+                if (c in 100..5000 && u <= c + c / 2 && (cap == null || c > cap!!)) { used = u; cap = c }
             }
         }
 
