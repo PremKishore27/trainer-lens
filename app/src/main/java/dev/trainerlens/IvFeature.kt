@@ -29,6 +29,9 @@ class IvFeature(private val ctx: Context, private val worker: Executor) {
     }
     val panel: View = view
 
+    /** The window is small (compact card: ring, IV values and best league) or normal / big (the full card). Main thread. */
+    fun setCompact(on: Boolean) = view.setCompact(on)
+
     // worker-thread state
     private val tracker = MonTracker { m -> SpeciesDb.get()?.let { Identify.analyze(m, it) } }
     private var arc: ArcReader? = null

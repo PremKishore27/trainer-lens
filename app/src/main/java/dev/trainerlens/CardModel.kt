@@ -14,6 +14,9 @@ data class StatBar(val min: Int, val max: Int) {
 
 data class LeagueRow(val name: String, val value: String, val mark: Mark)
 
+/** The one-line answer the compact card gives: which league(s) this Pokémon is good for. */
+data class LeaguePick(val text: String, val mark: Mark)
+
 /**
  * Everything the IV card shows, as plain data. A result card always has the same structure (3 stat bars, 3 chips,
  * 4 league rows) so the view never changes size; a message card shows [message] instead. Pure Kotlin, unit-tested.
@@ -32,7 +35,10 @@ data class CardModel(
     val status: String = "",
     val others: List<Species> = emptyList(),
     val art: Art = Art.NONE,
-)
+) {
+    /** What the compact card shows instead of the four league rows. */
+    val leaguePick: LeaguePick get() = CardModels.leaguePick(leagues)
+}
 
 object CardModels {
     const val IDLE_TEXT = "Open your Pokémon list and\ntap a Pokémon. For exact IVs:\n☰ → Appraise in the game."
@@ -81,6 +87,17 @@ object CardModels {
         val master = if (cp > 2500 && r.candidates.all { it.total >= 42 }) LeagueRow("Master", "Good IVs", Mark.GOOD)
         else LeagueRow("Master", "—", Mark.NONE)
         return listOf(row("Little", 500, r.little), row("Great", 1500, r.great), row("Ultra", 2500, r.ultra), master)
+    }
+
+    /** Good (top 100 for every spread that fits) beats maybe; with neither the Pokémon isn't a league pick. */
+    fun leaguePick(leagues: List<LeagueRow>): LeaguePick {
+        fun names(m: Mark) = leagues.filter { it.mark == m }.joinToString(" · ") { it.name }
+        return when {
+            leagues.any { it.mark == Mark.GOOD } -> LeaguePick("Good for ${names(Mark.GOOD)}", Mark.GOOD)
+            leagues.any { it.mark == Mark.MAYBE } -> LeaguePick("Maybe ${names(Mark.MAYBE)}", Mark.MAYBE)
+            leagues.any { it.mark == Mark.BAD } -> LeaguePick("No league fit", Mark.BAD)
+            else -> LeaguePick("No league fit", Mark.NONE)
+        }
     }
 
     fun from(r: IvResult, m: Mon): CardModel {

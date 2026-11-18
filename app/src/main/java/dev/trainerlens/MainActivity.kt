@@ -100,7 +100,8 @@ class MainActivity : AppCompatActivity() {
         const val HOWTO = "Open Pokémon GO and drag the 🔍 bubble anywhere. Tap it to open the window.\n\n" +
             "• IV tab: open a Pokémon from your Pokémon list. For exact IVs tap ☰ → Appraise.\n" +
             "• Bag tab: tap the Poké Ball → Items and scroll slowly.\n" +
-            "• Drag the top bar to move the window, and drag its bottom edge to resize it.\n" +
+            "• Drag the top bar to move the window, and drag its bottom edge to resize it: small shows only the IV ring, the IV values and the best league, bigger shows the full card.\n" +
+            "• Bag tab: red pills = what to discard, green pills = what to keep.\n" +
             "• The window tells you where to go if you're on the wrong screen."
         const val NOTE = "• IV values are estimates from CP, HP and stardust; appraise for exact IVs.\n" +
             "• Mega, buddy-boosted and some special Pokémon can be misjudged. English game language only.\n" +

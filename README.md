@@ -150,8 +150,8 @@ Tested on: Motorola Signature (Android 17). Requires Android 8.0 or newer.
      then **Uncommon** (Max Potion, Max Revive, Ultra Ball, Silver Pinap) – only their surplus. **Rare** items are never suggested.
    - **Bag full?** It lists exactly what to discard to get 30 free slots, common items first. If the surplus isn't enough, it goes
      down to half the keep limit of *common* items and marks those *(below keep limit)*.
-   - **Can remove** – items above their keep limit (e.g. 84 Poké Balls with a limit of 50 → remove 34).
-   - **Keep** – everything else, plus protected items (incense, lures, passes, incubators, camera, gifts, evolution items, Star Piece, Lucky Egg, Golden Razz, Rare Candy, TMs) that are never suggested.
+   - **Can remove** – items above their keep limit (e.g. 84 Poké Balls with a limit of 50 → remove 34), each on a **red pill**.
+   - **Keep** – everything else, each on a **green pill**, plus protected items (incense, lures, passes, incubators, camera, gifts, evolution items, Star Piece, Lucky Egg, Golden Razz, Rare Candy, TMs) that are never suggested.
    - **Free more (+10)** – the app aims to keep 30 slots empty; each tap raises the target by 10. It only matters when the bag is nearly full.
 
 **"remembered: 0 item types"?** Stop on a part of the list, tap **📋 Copy screen text** in the Bag tab and paste it into a
@@ -161,7 +161,7 @@ Keep limits and rarity are in [`Rules.kt`](app/src/main/java/dev/trainerlens/Rul
 
 ### 📊 IV checker
 Tap 🔍 → **IV**, then open a Pokémon from your Pokémon list. The window opens in the free band between the CP line and the HP line, so it hides nothing the app reads; drag it by its top bar if you want it elsewhere.
-**Resize:** drag the thin bar along the bottom edge of the window up or down. The window grows or shrinks (width follows height) and remembers its size.
+**Resize:** drag the thin bar along the bottom edge of the window up or down. The window grows or shrinks (width follows height) and remembers its size. **Make it small** for a quick glance: you then see only the % ring, the Attack / Defense / HP values and one line saying which league the Pokémon is good for (*Good for Great · Master*, *Maybe Ultra* or *No league fit*). **Normal size and bigger** show the full card below.
 **Renamed Pokémon:** if the card says *Can't tell which Pokémon this is*, open ☰ → **Appraise** in the game. The app reads the *"This … was caught on …"* line of that screen (also "Alolan Exeggutor" style names) and identifies the Pokémon by itself.
 When you open the appraisal in the game, the window moves up out of its way by itself. If it covers the Pokémon's HP / name / type lines, the card says **Can't read the HP line** – drag the window up or down. For the **exact** result, appraise it in-game (☰ → Appraise) and keep the bars on screen for a second.
 The card shows:

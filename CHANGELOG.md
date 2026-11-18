@@ -5,6 +5,8 @@ Newest first. The latest build is always on the [Releases](https://github.com/Pr
 ## Unreleased → next release
 
 ### Added
+- **Bag pills:** items the app recommends to discard are now whole red pill-shaped rows, and items to keep are green pills (before, only the amount was coloured and the keep list was a single line of text). Nothing else is highlighted.
+- **Two sizes of IV card:** make the window small and the IV tab shows only the key numbers: the % ring (bigger), the Attack / Defense / HP values and one line saying which league the Pokémon is good for. At the normal size and bigger you get the full card, exactly as before. The window can now be made a bit smaller than before.
 - **Real screenshots** in the README and walkthrough, with numbered highlights, shown separately for the IV checker and the Bag checker.
 - **Step-by-step walkthrough with pictures** ([docs/WALKTHROUGH.md](docs/WALKTHROUGH.md)): install, setup, and how to use the IV and Bag tabs, with drawn illustrations.
 - **App icon** (a magnifying glass with IV bars, also a themed icon on Android 13+) and a status-bar icon.
