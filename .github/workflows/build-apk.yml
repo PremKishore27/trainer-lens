@@ -77,3 +77,48 @@ jobs:
           } > notes.md
           gh release create "v$v" out/TrainerLens-v$v.apk out/TrainerLens.apk \
             --title "Trainer Lens v$v" --notes-file notes.md --target "${{ github.sha }}" --latest
+
+  # iPhone / iPad: an UNSIGNED .ipa built on GitHub's Mac servers. Sideloadly or AltStore signs it with your own Apple ID.
+  ios:
+    runs-on: macos-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the shared logic (the same IV maths and Pokémon data as the Android tests)
+        run: ios/Tests/run.sh
+
+      - name: Generate the Xcode project
+        run: |
+          brew install xcodegen
+          cd ios && xcodegen generate
+
+      - name: Build unsigned app
+        run: |
+          xcodebuild -project ios/TrainerLens.xcodeproj -scheme TrainerLens \
+            -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            MARKETING_VERSION=0.2.${{ github.run_number }} CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: Package .ipa
+        run: |
+          v="0.2.${{ github.run_number }}"
+          mkdir -p Payload out
+          cp -R build/Build/Products/Release-iphoneos/TrainerLens.app Payload/
+          zip -qry "out/TrainerLens-iOS-unsigned-v$v.ipa" Payload
+          cp "out/TrainerLens-iOS-unsigned-v$v.ipa" out/TrainerLens-iOS-unsigned.ipa
+          ls -l out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TrainerLens-iOS-unsigned-v0.2.${{ github.run_number }}
+          path: out/TrainerLens-iOS-unsigned-v0.2.${{ github.run_number }}.ipa
+
+      # On main the Android job has just created the release: add the iPhone file to it.
+      - name: Attach to the release
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "v0.2.${{ github.run_number }}" out/TrainerLens-iOS-unsigned-v0.2.${{ github.run_number }}.ipa out/TrainerLens-iOS-unsigned.ipa --clobber

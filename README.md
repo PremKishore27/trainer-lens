@@ -17,6 +17,8 @@ A small movable window floats on top of the game and reads your screen with on-d
 ### ⬇️ [Download the latest APK](https://github.com/PremKishore27/trainer-lens/releases/latest/download/TrainerLens.apk)
 
 Android 8.0+ · free · open source (MIT) · [step-by-step install guide](#install) · [what's new](CHANGELOG.md)
+
+**iPhone / iPad:** [Download the unsigned .ipa](https://github.com/PremKishore27/trainer-lens/releases/latest/download/TrainerLens-iOS-unsigned.ipa) (screenshot version, sideloaded) · [how to install and use it](docs/IOS.md)
 <sub>💬 Questions or ideas? [Open an issue](https://github.com/PremKishore27/trainer-lens/issues/new/choose) · ☕ [Support on Ko-fi](https://ko-fi.com/premboii) · 🤖 [Built with AI assistance](#about-this-project)</sub>
 
 ## See it in action
@@ -245,6 +247,12 @@ Every push builds an APK on GitHub Actions; pushes to `main` publish a new [Rele
 | `MainActivity.kt` | Setup screen with the 5 steps |
 
 </details>
+
+## iPhone and iPad
+
+iOS doesn't let an app float over another app or watch the screen live, so the iPhone version works on **screenshots**: take a screenshot of a Pokémon (and of its appraisal), choose it in Trainer Lens, and you get the same IV card and league ranks. The Bag tab reads screenshots of your Items list the same way. The IV maths, Pokémon data and bag rules are the same as on Android and are checked by the same game-data tests; the screen reading uses Apple's on-device text recognition.
+
+It is **not on the App Store**: you install an unsigned `.ipa` with your own Apple ID (AltStore, SideStore or Sideloadly), and a free Apple ID needs re-signing every 7 days. Step by step: **[docs/IOS.md](docs/IOS.md)**. It has not been run on a real iPhone yet, so treat it as a first version and [report problems](https://github.com/PremKishore27/trainer-lens/issues/new/choose).
 
 ## Roadmap
 

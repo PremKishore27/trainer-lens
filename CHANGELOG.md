@@ -5,6 +5,7 @@ Newest first. The latest build is always on the [Releases](https://github.com/Pr
 ## Unreleased → next release
 
 ### Added
+- **iPhone / iPad version (unsigned .ipa, first version):** a screenshot-based app: choose your Pokémon and appraisal screenshots for the IV card and league ranks, and your Items screenshots for the bag advice (red pills to discard, green to keep). Same maths and data as Android, text read on the device with Apple Vision. Built by GitHub on every release and sideloaded with AltStore, SideStore or Sideloadly; see [docs/IOS.md](docs/IOS.md). Not yet tried on a real iPhone.
 - **Bag pills:** items the app recommends to discard are now whole red pill-shaped rows, and items to keep are green pills (before, only the amount was coloured and the keep list was a single line of text). Nothing else is highlighted.
 - **Two sizes of IV card:** make the window small and the IV tab shows only the key numbers: the % ring (bigger), the Attack / Defense / HP values and one line saying which league the Pokémon is good for. At the normal size and bigger you get the full card, exactly as before. The window can now be made a bit smaller than before.
 - **Real screenshots** in the README and walkthrough, with numbered highlights, shown separately for the IV checker and the Bag checker.
